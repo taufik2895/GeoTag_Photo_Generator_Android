@@ -1,15 +1,17 @@
 # GeoTag Photo Generator Android
 
-Native Android application for producing locally generated photos with selected map coordinates and related GeoTag details. The project is currently at its Android bootstrap stage.
+Native Android application for generating locally processed GeoTag images from an existing device photo and a selected map coordinate.
 
 ## Current implementation
 
-- Kotlin Android application module with application ID `com.geotagphotogenerator`.
-- Minimum Android SDK 23; compile and target SDK 36.
-- A Compose launcher activity renders through a Material 3 theme.
-- No permissions are declared, including no camera permission.
+- Kotlin Android app module with package ID `com.geotagphotogenerator`.
+- Android SDK configuration targets SDK 36 with min SDK 23.
+- Jetpack Compose and Material 3 foundation are in place.
+- Adaptive workflow shell switches between mobile and wide layouts using responsive Compose layout logic.
+- App theme and typography define the project’s shared design foundation.
+- No camera permission or camera-related code is present.
 
-Google Maps, Photo Picker, Firebase Remote Config, image generation, save, and share are not implemented yet. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
+Google Maps integration, Photo Picker, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 
@@ -28,8 +30,8 @@ $env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot'
 
 ## Privacy and permissions
 
-The bootstrap has no runtime permissions and no network-facing product services. Camera support is prohibited and absent.
+The current app foundation has no runtime permissions and no network-facing product services. Camera support remains prohibited and absent.
 
 ## Known limitations
 
-This is only task A01. It is not yet a functional GeoTag generator.
+The app is still in the foundational stage. It verifies the Compose foundation and adaptive layout shell, but the product workflow features remain to be implemented.
