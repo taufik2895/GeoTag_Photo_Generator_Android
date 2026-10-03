@@ -59,7 +59,7 @@ The web prototype is complete and remains a behavioral/reference implementation.
 | A01 | Bootstrap Android project | VERIFIED | Debug APK built successfully (user-provided build output), independently inspected with `aapt`, installed and launched on `emulator-5554`; bootstrap UI was visible and no app crash occurred. |
 | A02 | Compose + Material 3 foundation | VERIFIED | Project compiles and renders a Material 3 app shell with theme, typography, and workflow cards. |
 | A03 | Material 3 Adaptive foundation | VERIFIED | App uses responsive layout logic to switch between compact and wide layouts with navigation rail support. |
-| A04 | Photo Picker / existing-photo flow | NOT_STARTED | Must verify no camera |
+| A04 | Photo Picker / existing-photo flow | VERIFIED | Android image-only Photo Picker returns an image URI, the app validates image access and keeps the URI in saveable Compose state; emulator selection, cancellation, and unavailable-image handling verified. |
 | A05 | Photo preview + safe bitmap handling | NOT_STARTED | |
 | A06 | Google Maps SDK integration | NOT_STARTED | Requires valid Google configuration for runtime verification |
 | A07 | Coordinate selection/state | NOT_STARTED | |
@@ -361,6 +361,59 @@ Known limitations:
 Date:
 - 2026-10-03
 
+### A04 — Photo Picker / existing-photo flow
+
+Status: VERIFIED
+
+Implemented:
+- Wired the existing-photo actions to Android `ActivityResultContracts.PickVisualMedia` with the image-only request.
+- Stored the selected `Uri` and MIME type in saveable Compose state.
+- Validated image MIME type and URI readability on `Dispatchers.IO` without decoding or rendering the bitmap.
+- Added visible validation progress and user-facing errors for unsupported, missing, denied, or unreadable image selections.
+- Picker cancellation leaves the current selected-photo state unchanged.
+- No new dependency or permission was required.
+
+Files changed:
+- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `README.md`
+- `IMPLEMENTATION_STATUS.md`
+
+Validation:
+- Command: `.\gradlew.bat --no-daemon assembleDebug --console=plain`
+- Result: PASS — `BUILD SUCCESSFUL in 54s`.
+- Command: `.\gradlew.bat --no-daemon test --console=plain`
+- Result: PASS — `BUILD SUCCESSFUL in 52s`; Gradle reports no unit-test source files (`NO-SOURCE`).
+- Emulator: `emulator-5554`.
+- Installed the newly built `app\build\outputs\apk\debug\app-debug.apk`; `adb install -r` returned `Success`.
+- Cold launch: `adb shell am start -W -n com.geotagphotogenerator/.MainActivity` returned `Status: ok`; the app process remained alive and `MainActivity` was top-resumed.
+- Photo Picker: tapping “Select existing photo” opened `com.google.android.photopicker/.MainActivity` with `android.provider.action.PICK_IMAGES` and `image/*`.
+- Selection: selected a temporary local JPEG in the system picker; the app returned to the foreground and displayed “Photo selected” and `image/jpeg`.
+- Cancellation: cancelling the picker with and without an existing selection returned to the app without a crash; the existing selection remained visible when applicable.
+- Unavailable-image handling: removing the selected test image before validation produced the visible “The selected image is no longer available. Choose another image.” error; the app remained alive.
+- Crash logs: app-process log inspection found no `FATAL EXCEPTION`, `AndroidRuntime`, or `Fatal signal`.
+- Packaged permissions: `aapt dump permissions` showed no CAMERA or broad storage permission. The only generated permission is AndroidX's package-specific `DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`.
+- Static scope checks: no camera APIs/dependencies or A05+ implementation (bitmap decode/preview, Maps, coordinates, address, date/time, QR, compositor, MediaStore, Sharesheet, Firebase) found in source or Gradle configuration.
+- `git diff --check` passed.
+
+Self-audit:
+- Dead code: PASS
+- Unused imports: PASS
+- Unused dependencies: PASS — no dependency changes.
+- Debug code/logging: PASS — no TODO/FIXME, `println`, or debug logging introduced.
+- Security/secrets: PASS — local URI only; no uploads, credentials, or cloud services.
+- Main-thread blocking: PASS — URI access validation runs on `Dispatchers.IO`.
+- Memory/resource issues: PASS — input stream is closed; no bitmap is decoded or retained.
+- Compose state/lifecycle: PASS — picker result uses saveable URI/MIME state; cancellation is a no-op.
+- Camera requirement: PASS — no camera permission, intent, API, UI, or dependency.
+- Regression check: PASS — A01-A03 UI shell remains in place.
+
+Known limitations:
+- This task does not decode or render a photo preview; bitmap handling belongs to A05.
+- Gradle's `test` task passes, but the project currently has no unit-test source files.
+
+Date:
+- 2026-10-03
+
 ---
 
 ## Regression Checklist
@@ -460,40 +513,41 @@ Last Updated:
 
 Do not erase useful historical evidence merely to make the file shorter.
 
-Current Task: A03 — Material 3 Adaptive foundation
+Current Task: A04 — Photo Picker / existing-photo flow
 
 Status: VERIFIED
 
 Completed:
-- Verified the Android bootstrap.
-- Implemented the Material 3 foundation and adaptive app shell.
-- Confirmed the app compiles and the workflow shell displays correctly in compact and wide layouts.
+- Verified A01 bootstrap, A02 Material 3 foundation, and A03 adaptive app shell.
+- Implemented A04 using Android's image-only Photo Picker and saveable Compose URI state.
+- Verified image selection, cancellation with/without an existing selection, and unavailable-image error handling on `emulator-5554`.
+- Confirmed debug build and Gradle test task pass.
 
 Remaining:
-- Begin A04 — Photo Picker / existing-photo flow.
+- Begin A05 — Photo preview + safe bitmap handling.
 
 Files Changed:
 - `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
-- `app/src/main/java/com/geotagphotogenerator/ui/theme/Theme.kt`
-- `app/src/main/java/com/geotagphotogenerator/ui/theme/Type.kt`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `./gradlew.bat --no-daemon assembleDebug` passed.
-- `./gradlew.bat --no-daemon test` passed.
-- `grep` self-audit confirmed no `CAMERA`, `CameraX`, `camera`, `println`, `TODO`, or `FIXME` references under `app/src`.
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` passed (`BUILD SUCCESSFUL in 54s`).
+- `.\gradlew.bat --no-daemon test --console=plain` passed (`BUILD SUCCESSFUL in 52s`; no unit-test source files).
+- Emulator install, cold launch, picker opening, JPEG selection, cancellation, and unavailable-image handling passed on `emulator-5554`.
+- Packaged manifest check found no camera or broad-storage permissions.
+- Source/dependency scope search found no camera support or A05+ feature implementation.
 
 Self-Audit:
-- XML parser and build validation succeeded.
-- Code search confirmed no camera or debug references in the implementation.
-- The app foundation remains within approved scope and without cloud services or secrets.
+- Input validation executes off the main thread; streams are closed and no bitmap is decoded.
+- No new dependencies, permissions, services, secrets, or logging were introduced.
+- No A05+ feature implementation was added.
 
 Blockers:
-- None for A02/A03.
+- None for A04.
 
 Next Action:
-- Implement A04 — Photo Picker / existing-photo flow using Android Photo Picker and no camera support.
+- Implement A05 — Photo preview + safe bitmap handling.
 
 Last Updated: 2026-10-03
 

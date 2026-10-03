@@ -1,8 +1,13 @@
 package com.geotagphotogenerator
 
+import android.content.ContentResolver
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -28,14 +33,25 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.geotagphotogenerator.ui.theme.GeoTagPhotoGeneratorTheme
+import java.io.FileNotFoundException
+import java.io.IOException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -55,20 +71,82 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun GeoTagPhotoGeneratorApp() {
+    val contentResolver = LocalContext.current.contentResolver
+    var selectedPhotoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
+    var selectedPhotoMimeType by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectionError by rememberSaveable { mutableStateOf<String?>(null) }
+    var isValidatingSelection by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    val photoPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) {
+            return@rememberLauncherForActivityResult
+        }
+
+        isValidatingSelection = true
+        scope.launch {
+            try {
+                val mimeType = withContext(Dispatchers.IO) {
+                    validateImageUri(contentResolver, uri)
+                }
+                selectedPhotoUri = uri
+                selectedPhotoMimeType = mimeType
+                selectionError = null
+            } catch (exception: IllegalArgumentException) {
+                selectionError = "Choose a supported image file."
+            } catch (exception: FileNotFoundException) {
+                selectionError = "The selected image is no longer available. Choose another image."
+            } catch (exception: SecurityException) {
+                selectionError = "Access to the selected image was denied. Choose another image."
+            } catch (exception: IOException) {
+                selectionError = "The selected image could not be opened. Choose another image."
+            } finally {
+                isValidatingSelection = false
+            }
+        }
+    }
+
+    val selectPhoto = {
+        selectionError = null
+        photoPicker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
+    }
+
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
     ) {
         val isCompact = maxWidth < 600.dp
         if (isCompact) {
-            CompactLayout()
+            CompactLayout(
+                selectedPhotoUri = selectedPhotoUri,
+                selectedPhotoMimeType = selectedPhotoMimeType,
+                selectionError = selectionError,
+                isValidatingSelection = isValidatingSelection,
+                onSelectPhoto = selectPhoto,
+            )
         } else {
-            WideLayout()
+            WideLayout(
+                selectedPhotoUri = selectedPhotoUri,
+                selectedPhotoMimeType = selectedPhotoMimeType,
+                selectionError = selectionError,
+                isValidatingSelection = isValidatingSelection,
+                onSelectPhoto = selectPhoto,
+            )
         }
     }
 }
 
 @Composable
-private fun CompactLayout() {
+private fun CompactLayout(
+    selectedPhotoUri: Uri?,
+    selectedPhotoMimeType: String?,
+    selectionError: String?,
+    isValidatingSelection: Boolean,
+    onSelectPhoto: () -> Unit,
+) {
     val workflowSteps = listOf(
         "Select existing photo",
         "Choose location",
@@ -108,18 +186,35 @@ private fun CompactLayout() {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Photo preview",
+                            text = when {
+                                selectedPhotoUri != null -> "Photo selected"
+                                isValidatingSelection -> "Checking selected photo…"
+                                else -> "Photo preview"
+                            },
                             style = MaterialTheme.typography.titleLarge,
                             color = MaterialTheme.colorScheme.onSurface,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "Existing photo flow only",
+                            text = selectedPhotoMimeType
+                                ?: if (isValidatingSelection) {
+                                    "Checking image access…"
+                                } else {
+                                    "Select an existing photo to get started."
+                                },
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+            }
+
+            selectionError?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
 
             WorkflowSteps(workflowSteps)
@@ -129,10 +224,10 @@ private fun CompactLayout() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Button(
-                    onClick = { },
+                    onClick = onSelectPhoto,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Select Photo")
+                    Text("Select existing photo")
                 }
                 Button(
                     onClick = { },
@@ -146,7 +241,13 @@ private fun CompactLayout() {
 }
 
 @Composable
-private fun WideLayout() {
+private fun WideLayout(
+    selectedPhotoUri: Uri?,
+    selectedPhotoMimeType: String?,
+    selectionError: String?,
+    isValidatingSelection: Boolean,
+    onSelectPhoto: () -> Unit,
+) {
     val workflowSteps = listOf(
         "Select existing photo",
         "Choose location",
@@ -215,14 +316,40 @@ private fun WideLayout() {
                             ),
                         contentAlignment = Alignment.Center,
                     ) {
-                        Text(
-                            text = "Selected Photo",
-                            style = MaterialTheme.typography.headlineMedium,
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = when {
+                                    selectedPhotoUri != null -> "Photo selected"
+                                    isValidatingSelection -> "Checking selected photo…"
+                                    else -> "Photo preview"
+                                },
+                                style = MaterialTheme.typography.headlineMedium,
+                            )
+                            selectedPhotoMimeType?.let { mimeType ->
+                                Text(
+                                    text = mimeType,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                            if (selectedPhotoUri == null && isValidatingSelection) {
+                                Text(
+                                    text = "Checking image access…",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                )
+                            }
+                        }
                     }
                 }
 
                 WorkflowSteps(workflowSteps, modifier = Modifier.weight(1f))
+            }
+
+            selectionError?.let { error ->
+                Text(
+                    text = error,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodyLarge,
+                )
             }
 
             Row(
@@ -230,10 +357,10 @@ private fun WideLayout() {
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 Button(
-                    onClick = { },
+                    onClick = onSelectPhoto,
                     modifier = Modifier.weight(1f),
                 ) {
-                    Text("Select Photo")
+                    Text("Select existing photo")
                 }
                 Button(
                     onClick = { },
@@ -244,6 +371,18 @@ private fun WideLayout() {
             }
         }
     }
+}
+
+private fun validateImageUri(contentResolver: ContentResolver, uri: Uri): String {
+    val mimeType = contentResolver.getType(uri)
+        ?: throw FileNotFoundException("The selected image is no longer available.")
+    require(mimeType.startsWith("image/"))
+
+    val imageStream = contentResolver.openInputStream(uri)
+        ?: throw FileNotFoundException("The selected image could not be opened.")
+    imageStream.use { }
+
+    return mimeType
 }
 
 @Composable
