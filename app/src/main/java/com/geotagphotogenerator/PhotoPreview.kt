@@ -65,10 +65,10 @@ internal fun PhotoPreviewCard(
         var pendingBitmap: Bitmap? = null
 
         try {
-            pendingBitmap = withContext(Dispatchers.IO) {
-                decodePhotoPreview(contentResolver, uri)
+            withContext(Dispatchers.IO) {
+                pendingBitmap = decodePhotoPreview(contentResolver, uri)
             }
-            previewState = PreviewState.Ready(pendingBitmap)
+            previewState = PreviewState.Ready(checkNotNull(pendingBitmap))
             pendingBitmap = null
         } catch (exception: CancellationException) {
             throw exception

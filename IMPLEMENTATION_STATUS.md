@@ -60,7 +60,7 @@ The web prototype is complete and remains a behavioral/reference implementation.
 | A02 | Compose + Material 3 foundation | VERIFIED | Project compiles and renders a Material 3 app shell with theme, typography, and workflow cards. |
 | A03 | Material 3 Adaptive foundation | VERIFIED | App uses responsive layout logic to switch between compact and wide layouts with navigation rail support. |
 | A04 | Photo Picker / existing-photo flow | VERIFIED | Android image-only Photo Picker returns an image URI, the app validates image access and keeps the URI in saveable Compose state; emulator selection, cancellation, and unavailable-image handling verified. |
-| A05 | Photo preview + safe bitmap handling | VERIFIED | Bounded off-main-thread preview decode with orientation handling, visible loading/error states, and bitmap cleanup. Final build/test passed; fresh APK selected and rendered a JPEG on `emulator-5554`. |
+| A05 | Photo preview + safe bitmap handling | VERIFIED | Bounded off-main-thread preview decode with orientation handling, visible loading/error states, and bitmap cleanup. Audit fixed cancellation-time bitmap ownership; post-fix build/test pass and fresh APK launch on `emulator-5554`; actual image selection was verified in the earlier A05 runtime run. |
 | A06 | Google Maps SDK integration | NOT_STARTED | Requires valid Google configuration for runtime verification |
 | A07 | Coordinate selection/state | NOT_STARTED | |
 | A08 | Address resolution | NOT_STARTED | |
@@ -85,6 +85,28 @@ The web prototype is complete and remains a behavioral/reference implementation.
 | A27 | Final dead-code/security audit | NOT_STARTED | |
 | A28 | Release/AAB verification | NOT_STARTED | |
 | A29 | Play Store readiness audit | NOT_STARTED | |
+
+## Pre-A06 Audit — 2026-10-03
+
+Result: A01-A05 remain VERIFIED after repository/source review. No scope expansion beyond A06 is present.
+
+Audit findings and corrections:
+- A05 decode completion could lose ownership of a decoded bitmap if its Compose effect was cancelled at the `withContext` handoff. The IO block now assigns the bitmap to the cleanup-owned variable before returning, so cancellation/error cleanup can recycle it.
+- Removed the unused `bootstrap_message` resource.
+- Replaced a developer-machine-specific JDK path in README build instructions with the actual JDK 17 prerequisite and generic `JAVA_HOME` setup requirement.
+- `.gitignore` excludes `local.properties`, signing keys, and `google-services.json`; no Maps key, Firebase credential, or service configuration is tracked.
+- `DEVELOPER-COSTS-AND-BILLING.md` remains its template; no price, quota, billing state, or service usage was invented.
+
+Regression validation after audit fixes:
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS (`BUILD SUCCESSFUL in 1m 11s`).
+- `.\gradlew.bat --no-daemon test --console=plain` — PASS (`BUILD SUCCESSFUL in 1m 14s`); unit-test sources are `NO-SOURCE`.
+- Latest APK SHA-256: `08D71643AF59E2D402AABE3EBFC29A13CCA1A783F29218439011A2AB99553F7E`; installation on `emulator-5554` succeeded.
+- Cold launch displayed the Compose application and confirmed `MainActivity` top-resumed. The emulator later raised a system ANR for an input-focus event; `dumpsys cpuinfo` showed heavy emulator system/compositor kernel load. The app did not produce an AndroidRuntime fatal exception, but this run cannot count as a responsive interaction pass.
+- Photo Picker launch reached the system picker activity and Back returned to `MainActivity`. Repeated UI hierarchy/photo selection could not be completed during this audit because the emulator became unresponsive; earlier A04/A05 runs recorded successful selection, preview, replacement, cancellation, and recoverable corrupt-image behavior.
+- A repeated `.\gradlew.bat --no-daemon lintDebug --console=plain` attempt remained at `:app:lintAnalyzeDebug` for 180 seconds and was canceled; lint is not claimed as passing.
+- No camera permission/API/dependency/UI, broad storage permission, API key, or A06+ feature was found before this A06 change.
+
+A01-A05 audit decision: PASS; retain VERIFIED based on prior task evidence plus the post-fix build and available runtime checks. A05 Android 6-8 fallback remains compile-checked but not runtime-tested. The system Photo Picker ANR and current emulator instability are documented; no new image selection result is claimed from this audit pass.
 
 ---
 
@@ -513,50 +535,44 @@ Last Updated:
 
 Do not erase useful historical evidence merely to make the file shorter.
 
-Current Task: A05 — Photo preview + safe bitmap handling
+Current Task: Pre-A06 audit of A01-A05
 
 Status: VERIFIED
 
 Completed:
-- Added an image preview integrated into both compact and wide layouts.
-- Decodes content URIs off the main thread, downsizes previews, handles EXIF orientation, and releases decoded/replaced bitmaps.
-- Added empty, loading, ready, and recoverable error UI states.
-- Preserved verified A01-A04 behavior; no A06+ implementation was added.
+- Audited A01-A05 against the project contracts, actual source/configuration, build state, and Git history.
+- Fixed cancellation-time bitmap ownership, removed an unused bootstrap resource, and corrected the README's machine-specific JDK path.
+- Retained A01-A05 VERIFIED with prior functional evidence and accurately documented current emulator/lint limitations.
 
 Remaining:
-- Begin A06 — Google Maps SDK integration only after this checkpoint.
+- Begin A06 — Google Maps SDK integration; do not implement A07+.
 
 Files Changed:
-- `app/build.gradle.kts`
-- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/src/main/res/values/strings.xml`
 - `app/src/main/java/com/geotagphotogenerator/PhotoPreview.kt`
-- `gradle/libs.versions.toml`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `.\gradlew.bat --no-daemon assembleDebug --console=plain` passed (`BUILD SUCCESSFUL in 51s`).
-- `.\gradlew.bat --no-daemon test --console=plain` passed (`BUILD SUCCESSFUL in 45s`; unit-test source sets are `NO-SOURCE`).
-- An optional `lintDebug` attempt stalled at `:app:lintAnalyzeDebug` without producing a result and was canceled; lint is not claimed as passed.
-- Installed the APK produced by that build (`app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `74A1AB9E6B296908A54E43E052A3AC9D0DDBF75D85D3E0BCFB7A1AFF53BF3FC5`) on `emulator-5554`, force-stopped, and cold-launched it.
-- Confirmed `MainActivity` was top-resumed, the app process remained alive, the empty preview UI rendered, and the UI hierarchy exposed `Selected photo preview, image/jpeg` after selecting an existing image through Android Photo Picker.
-- On a repeat cancellation attempt, the system Photo Picker displayed “Photos & videos isn't responding”; closing that system dialog left the app process alive. Earlier A05 emulator checks on this same picker/preview state flow verified normal cancellation preserves the selected preview. This repeat did not produce an app `AndroidRuntime` fatal log.
-- The earlier A05 runtime checks also verified large-image preview, landscape/portrait aspect ratio and orientation, replacement, cancellation-preservation, and corrupt-image error handling without an app crash.
-- Android 9+ `ImageDecoder` path was runtime exercised. The Android 6-8 `BitmapFactory`/ExifInterface fallback is compile-checked but was not available for emulator runtime verification.
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` passed (`BUILD SUCCESSFUL in 1m 11s`).
+- `.\gradlew.bat --no-daemon test --console=plain` passed (`BUILD SUCCESSFUL in 1m 14s`; unit-test source sets are `NO-SOURCE`).
+- `.\gradlew.bat --no-daemon lintDebug --console=plain` stalled at `:app:lintAnalyzeDebug` for 180 seconds and was canceled; lint is not a pass.
+- Latest APK (`app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `08D71643AF59E2D402AABE3EBFC29A13CCA1A783F29218439011A2AB99553F7E`) installed successfully. MainActivity was top-resumed and the Compose UI was visible; the emulator later showed an input-focus ANR under heavy system/compositor load. No app AndroidRuntime fatal log was found.
+- The Photo Picker opened and Back returned to the app, but repeat image selection was not verified in this audit pass because the emulator stopped responding. Earlier A04/A05 records contain successful selection, rendering, replacement, cancellation, and corrupt-image handling.
+- Earlier A05 runtime checks covered large images, orientation/aspect ratio, replacement, and preview-error recovery. Android 9+ `ImageDecoder` was exercised; the Android 6-8 fallback is compile-checked only.
 
 Self-Audit:
-- Fixed a bounds-only decode check so a valid `BitmapFactory` stream returning `null` for bounds mode is not misreported as an unavailable photo.
-- Preview loading/decoding runs off the main thread; content streams close deterministically and temporary, replaced, and disposed bitmaps are released.
-- Touched Kotlin files have no editor diagnostics; no camera permission/API/dependency or camera UI was found.
-- App source and dependency audit found no A06+ Maps, coordinate, address, date/time, QR, compositor, MediaStore, Sharesheet, or Firebase implementation.
-- `DEVELOPER-COSTS-AND-BILLING.md` remains the approved template; no service or billing configuration was invented.
+- Fixed bounds-only decode validation and cancellation-time bitmap handoff cleanup; replaced/disposed bitmaps and streams remain released.
+- Removed unused `bootstrap_message`; changed README setup to avoid a local machine's hard-coded JDK path.
+- No camera permission/API/dependency/UI, secret-shaped Maps key, broad storage permission, or A06+ implementation was found before starting A06.
+- The cost/billing document remains its approved template.
 
 Blockers:
-- A repeated cancel check was interrupted by an Android system Photo Picker ANR; ordinary cancellation-preservation had passed in the earlier A05 emulator run.
+- Current emulator interaction is limited by repeat system/app input-focus ANRs and unusually high system/compositor load; earlier A04/A05 selection checks remain recorded.
 - No unit-test source files currently exist; the Gradle `test` task passed with `NO-SOURCE`.
 
 Next Action:
-- Implement A06 — Google Maps SDK integration; do not include A07+ scope.
+- Implement A06 — Google Maps SDK integration; no coordinate selection or A07+ work.
 
 Last Updated: 2026-10-03
 

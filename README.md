@@ -25,10 +25,9 @@ Google Maps integration, coordinate selection, address resolution, date/time sel
 
 ## Build
 
-On Windows PowerShell, set `JAVA_HOME` to a JDK 17 installation (the development environment currently uses Eclipse Temurin 17.0.20.1), then run:
+Install JDK 17 and Android SDK Platform 36 with Build-Tools 36.1.0. Configure `JAVA_HOME` to your JDK 17 installation, then run:
 
 ```powershell
-$env:JAVA_HOME = 'C:\Program Files\Eclipse Adoptium\jdk-17.0.20.101-hotspot'
 .\gradlew.bat assembleDebug
 ```
 
