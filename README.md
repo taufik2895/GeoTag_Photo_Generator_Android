@@ -6,10 +6,10 @@ Native Android application for producing locally generated photos with selected 
 
 - Kotlin Android application module with application ID `com.geotagphotogenerator`.
 - Minimum Android SDK 23; compile and target SDK 36.
-- A single launcher activity confirms the project bootstrap.
+- A Compose launcher activity renders through a Material 3 theme.
 - No permissions are declared, including no camera permission.
 
-Compose, Google Maps, Photo Picker, Firebase Remote Config, image generation, save, and share are not implemented yet. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
+Google Maps, Photo Picker, Firebase Remote Config, image generation, save, and share are not implemented yet. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 
