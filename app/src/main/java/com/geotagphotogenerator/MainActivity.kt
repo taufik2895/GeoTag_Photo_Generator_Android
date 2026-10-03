@@ -74,8 +74,8 @@ private fun GeoTagPhotoGeneratorApp() {
     val contentResolver = LocalContext.current.contentResolver
     var selectedPhotoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var selectedPhotoMimeType by rememberSaveable { mutableStateOf<String?>(null) }
+    var photoPreviewRequestId by rememberSaveable { mutableStateOf(0) }
     var selectionError by rememberSaveable { mutableStateOf<String?>(null) }
-    var isValidatingSelection by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     val photoPicker = rememberLauncherForActivityResult(
@@ -85,7 +85,6 @@ private fun GeoTagPhotoGeneratorApp() {
             return@rememberLauncherForActivityResult
         }
 
-        isValidatingSelection = true
         scope.launch {
             try {
                 val mimeType = withContext(Dispatchers.IO) {
@@ -93,6 +92,7 @@ private fun GeoTagPhotoGeneratorApp() {
                 }
                 selectedPhotoUri = uri
                 selectedPhotoMimeType = mimeType
+                photoPreviewRequestId += 1
                 selectionError = null
             } catch (exception: IllegalArgumentException) {
                 selectionError = "Choose a supported image file."
@@ -102,8 +102,6 @@ private fun GeoTagPhotoGeneratorApp() {
                 selectionError = "Access to the selected image was denied. Choose another image."
             } catch (exception: IOException) {
                 selectionError = "The selected image could not be opened. Choose another image."
-            } finally {
-                isValidatingSelection = false
             }
         }
     }
@@ -123,16 +121,16 @@ private fun GeoTagPhotoGeneratorApp() {
             CompactLayout(
                 selectedPhotoUri = selectedPhotoUri,
                 selectedPhotoMimeType = selectedPhotoMimeType,
+                photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
-                isValidatingSelection = isValidatingSelection,
                 onSelectPhoto = selectPhoto,
             )
         } else {
             WideLayout(
                 selectedPhotoUri = selectedPhotoUri,
                 selectedPhotoMimeType = selectedPhotoMimeType,
+                photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
-                isValidatingSelection = isValidatingSelection,
                 onSelectPhoto = selectPhoto,
             )
         }
@@ -143,8 +141,8 @@ private fun GeoTagPhotoGeneratorApp() {
 private fun CompactLayout(
     selectedPhotoUri: Uri?,
     selectedPhotoMimeType: String?,
+    photoPreviewRequestId: Int,
     selectionError: String?,
-    isValidatingSelection: Boolean,
     onSelectPhoto: () -> Unit,
 ) {
     val workflowSteps = listOf(
@@ -165,49 +163,13 @@ private fun CompactLayout(
         ) {
             HeaderCard()
 
-            Card(
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                ),
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(220.dp)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                listOf(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.18f),
-                                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f),
-                                ),
-                            ),
-                        ),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = when {
-                                selectedPhotoUri != null -> "Photo selected"
-                                isValidatingSelection -> "Checking selected photo…"
-                                else -> "Photo preview"
-                            },
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = selectedPhotoMimeType
-                                ?: if (isValidatingSelection) {
-                                    "Checking image access…"
-                                } else {
-                                    "Select an existing photo to get started."
-                                },
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
+            PhotoPreviewCard(
+                photoUri = selectedPhotoUri,
+                photoMimeType = selectedPhotoMimeType,
+                requestId = photoPreviewRequestId,
+                modifier = Modifier.fillMaxWidth(),
+                height = 220.dp,
+            )
 
             selectionError?.let { error ->
                 Text(
@@ -244,8 +206,8 @@ private fun CompactLayout(
 private fun WideLayout(
     selectedPhotoUri: Uri?,
     selectedPhotoMimeType: String?,
+    photoPreviewRequestId: Int,
     selectionError: String?,
-    isValidatingSelection: Boolean,
     onSelectPhoto: () -> Unit,
 ) {
     val workflowSteps = listOf(
@@ -296,50 +258,13 @@ private fun WideLayout(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Card(
+                PhotoPreviewCard(
+                    photoUri = selectedPhotoUri,
+                    photoMimeType = selectedPhotoMimeType,
+                    requestId = photoPreviewRequestId,
                     modifier = Modifier.weight(1f),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    ),
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(240.dp)
-                            .background(
-                                brush = Brush.verticalGradient(
-                                    listOf(
-                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.16f),
-                                        MaterialTheme.colorScheme.secondary.copy(alpha = 0.10f),
-                                    ),
-                                ),
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = when {
-                                    selectedPhotoUri != null -> "Photo selected"
-                                    isValidatingSelection -> "Checking selected photo…"
-                                    else -> "Photo preview"
-                                },
-                                style = MaterialTheme.typography.headlineMedium,
-                            )
-                            selectedPhotoMimeType?.let { mimeType ->
-                                Text(
-                                    text = mimeType,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                            }
-                            if (selectedPhotoUri == null && isValidatingSelection) {
-                                Text(
-                                    text = "Checking image access…",
-                                    style = MaterialTheme.typography.bodyLarge,
-                                )
-                            }
-                        }
-                    }
-                }
+                    height = 240.dp,
+                )
 
                 WorkflowSteps(workflowSteps, modifier = Modifier.weight(1f))
             }

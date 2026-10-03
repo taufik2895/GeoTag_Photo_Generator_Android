@@ -60,7 +60,7 @@ The web prototype is complete and remains a behavioral/reference implementation.
 | A02 | Compose + Material 3 foundation | VERIFIED | Project compiles and renders a Material 3 app shell with theme, typography, and workflow cards. |
 | A03 | Material 3 Adaptive foundation | VERIFIED | App uses responsive layout logic to switch between compact and wide layouts with navigation rail support. |
 | A04 | Photo Picker / existing-photo flow | VERIFIED | Android image-only Photo Picker returns an image URI, the app validates image access and keeps the URI in saveable Compose state; emulator selection, cancellation, and unavailable-image handling verified. |
-| A05 | Photo preview + safe bitmap handling | NOT_STARTED | |
+| A05 | Photo preview + safe bitmap handling | VERIFIED | Bounded off-main-thread preview decode with orientation handling, visible loading/error states, and bitmap cleanup. Final build/test passed; fresh APK selected and rendered a JPEG on `emulator-5554`. |
 | A06 | Google Maps SDK integration | NOT_STARTED | Requires valid Google configuration for runtime verification |
 | A07 | Coordinate selection/state | NOT_STARTED | |
 | A08 | Address resolution | NOT_STARTED | |
@@ -513,41 +513,50 @@ Last Updated:
 
 Do not erase useful historical evidence merely to make the file shorter.
 
-Current Task: A04 — Photo Picker / existing-photo flow
+Current Task: A05 — Photo preview + safe bitmap handling
 
 Status: VERIFIED
 
 Completed:
-- Verified A01 bootstrap, A02 Material 3 foundation, and A03 adaptive app shell.
-- Implemented A04 using Android's image-only Photo Picker and saveable Compose URI state.
-- Verified image selection, cancellation with/without an existing selection, and unavailable-image error handling on `emulator-5554`.
-- Confirmed debug build and Gradle test task pass.
+- Added an image preview integrated into both compact and wide layouts.
+- Decodes content URIs off the main thread, downsizes previews, handles EXIF orientation, and releases decoded/replaced bitmaps.
+- Added empty, loading, ready, and recoverable error UI states.
+- Preserved verified A01-A04 behavior; no A06+ implementation was added.
 
 Remaining:
-- Begin A05 — Photo preview + safe bitmap handling.
+- Begin A06 — Google Maps SDK integration only after this checkpoint.
 
 Files Changed:
+- `app/build.gradle.kts`
 - `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/src/main/java/com/geotagphotogenerator/PhotoPreview.kt`
+- `gradle/libs.versions.toml`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `.\gradlew.bat --no-daemon assembleDebug --console=plain` passed (`BUILD SUCCESSFUL in 54s`).
-- `.\gradlew.bat --no-daemon test --console=plain` passed (`BUILD SUCCESSFUL in 52s`; no unit-test source files).
-- Emulator install, cold launch, picker opening, JPEG selection, cancellation, and unavailable-image handling passed on `emulator-5554`.
-- Packaged manifest check found no camera or broad-storage permissions.
-- Source/dependency scope search found no camera support or A05+ feature implementation.
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` passed (`BUILD SUCCESSFUL in 51s`).
+- `.\gradlew.bat --no-daemon test --console=plain` passed (`BUILD SUCCESSFUL in 45s`; unit-test source sets are `NO-SOURCE`).
+- An optional `lintDebug` attempt stalled at `:app:lintAnalyzeDebug` without producing a result and was canceled; lint is not claimed as passed.
+- Installed the APK produced by that build (`app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `74A1AB9E6B296908A54E43E052A3AC9D0DDBF75D85D3E0BCFB7A1AFF53BF3FC5`) on `emulator-5554`, force-stopped, and cold-launched it.
+- Confirmed `MainActivity` was top-resumed, the app process remained alive, the empty preview UI rendered, and the UI hierarchy exposed `Selected photo preview, image/jpeg` after selecting an existing image through Android Photo Picker.
+- On a repeat cancellation attempt, the system Photo Picker displayed “Photos & videos isn't responding”; closing that system dialog left the app process alive. Earlier A05 emulator checks on this same picker/preview state flow verified normal cancellation preserves the selected preview. This repeat did not produce an app `AndroidRuntime` fatal log.
+- The earlier A05 runtime checks also verified large-image preview, landscape/portrait aspect ratio and orientation, replacement, cancellation-preservation, and corrupt-image error handling without an app crash.
+- Android 9+ `ImageDecoder` path was runtime exercised. The Android 6-8 `BitmapFactory`/ExifInterface fallback is compile-checked but was not available for emulator runtime verification.
 
 Self-Audit:
-- Input validation executes off the main thread; streams are closed and no bitmap is decoded.
-- No new dependencies, permissions, services, secrets, or logging were introduced.
-- No A05+ feature implementation was added.
+- Fixed a bounds-only decode check so a valid `BitmapFactory` stream returning `null` for bounds mode is not misreported as an unavailable photo.
+- Preview loading/decoding runs off the main thread; content streams close deterministically and temporary, replaced, and disposed bitmaps are released.
+- Touched Kotlin files have no editor diagnostics; no camera permission/API/dependency or camera UI was found.
+- App source and dependency audit found no A06+ Maps, coordinate, address, date/time, QR, compositor, MediaStore, Sharesheet, or Firebase implementation.
+- `DEVELOPER-COSTS-AND-BILLING.md` remains the approved template; no service or billing configuration was invented.
 
 Blockers:
-- None for A04.
+- A repeated cancel check was interrupted by an Android system Photo Picker ANR; ordinary cancellation-preservation had passed in the earlier A05 emulator run.
+- No unit-test source files currently exist; the Gradle `test` task passed with `NO-SOURCE`.
 
 Next Action:
-- Implement A05 — Photo preview + safe bitmap handling.
+- Implement A06 — Google Maps SDK integration; do not include A07+ scope.
 
 Last Updated: 2026-10-03
 
