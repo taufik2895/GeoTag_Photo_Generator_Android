@@ -1,0 +1,11 @@
+.gradle/
+build/
+app/build/
+local.properties
+*.iml
+.idea/
+
+# Signing material and local credentials must never be committed.
+*.jks
+*.keystore
+google-services.json
