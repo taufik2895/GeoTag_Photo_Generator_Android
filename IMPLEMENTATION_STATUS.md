@@ -61,7 +61,7 @@ The web prototype is complete and remains a behavioral/reference implementation.
 | A03 | Material 3 Adaptive foundation | VERIFIED | App uses responsive layout logic to switch between compact and wide layouts with navigation rail support. |
 | A04 | Photo Picker / existing-photo flow | VERIFIED | Android image-only Photo Picker returns an image URI, the app validates image access and keeps the URI in saveable Compose state; emulator selection, cancellation, and unavailable-image handling verified. |
 | A05 | Photo preview + safe bitmap handling | VERIFIED | Bounded off-main-thread preview decode with orientation handling, visible loading/error states, and bitmap cleanup. Audit fixed cancellation-time bitmap ownership; post-fix build/test pass and fresh APK launch on `emulator-5554`; actual image selection was verified in the earlier A05 runtime run. |
-| A06 | Google Maps SDK integration | NOT_STARTED | Requires valid Google configuration for runtime verification |
+| A06 | Google Maps SDK integration | BLOCKED | Maps Compose integration and local key injection are implemented; debug build and Gradle test task pass. No valid Maps API key/configuration is available, so the real map and pan/zoom could not be verified. The emulator rendered the Compose shell and explicit unconfigured state but displayed a system ANR dialog. See the A06 record below. |
 | A07 | Coordinate selection/state | NOT_STARTED | |
 | A08 | Address resolution | NOT_STARTED | |
 | A09 | Manual date/time | NOT_STARTED | |
@@ -107,6 +107,56 @@ Regression validation after audit fixes:
 - No camera permission/API/dependency/UI, broad storage permission, API key, or A06+ feature was found before this A06 change.
 
 A01-A05 audit decision: PASS; retain VERIFIED based on prior task evidence plus the post-fix build and available runtime checks. A05 Android 6-8 fallback remains compile-checked but not runtime-tested. The system Photo Picker ANR and current emulator instability are documented; no new image selection result is claimed from this audit pass.
+
+## A06 — Google Maps SDK integration — 2026-10-03
+
+Status: BLOCKED
+
+Implemented:
+- Added Maps Compose `6.5.3`, which resolves to Google Play Services Maps `19.0.0`; no Places, Routes, Static Maps, or Firebase dependency was added.
+- Added local-only Maps key lookup from the `MAPS_API_KEY` Gradle property, `GOOGLE_MAPS_API_KEY` environment variable, or ignored `local.properties`.
+- Added the required Maps API-key manifest metadata and a generated configuration flag. No key value is committed; without a key the app presents an explicit not-configured message instead of a fake map.
+- Added a native Google Map with a deterministic Jakarta initial camera and SDK zoom controls when configured. No marker, map-click handler, coordinate state, or A07 behavior was added.
+- Integrated the map card into both existing compact and wide Compose layouts.
+- Updated README setup notes to explain local key configuration, restriction requirements, and the unverified cloud setup.
+
+Files changed:
+- `app/build.gradle.kts`
+- `app/src/main/AndroidManifest.xml`
+- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/src/main/java/com/geotagphotogenerator/GoogleMapCard.kt`
+- `gradle/libs.versions.toml`
+- `README.md`
+- `IMPLEMENTATION_STATUS.md`
+
+Validation:
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS; `BUILD SUCCESSFUL in 9m 19s`.
+- `.\gradlew.bat --no-daemon test --console=plain` — PASS; `BUILD SUCCESSFUL in 1m 22s`; available test source sets report `NO-SOURCE`.
+- `.\gradlew.bat --no-daemon lintDebug --console=plain` — BLOCKED; remained at `:app:lintAnalyzeDebug` for 180 seconds and was canceled. Lint is not claimed as passing.
+- Dependency inspection confirmed `maps-compose:6.5.3` → `maps-ktx:5.1.1` → `play-services-maps:19.0.0`; no unrelated Maps Platform API or Firebase dependency was introduced.
+- The newly built debug APK (SHA-256 `D7D69EB6108F201FDD673012BAA21789B81AC76E8B69B8B5EB173069C2FE7BA9`) installed successfully on `emulator-5554`.
+
+Functional verification:
+- Cold launch made `com.geotagphotogenerator/.MainActivity` top-resumed and its process remained alive (PID `20737`).
+- A captured screen showed the rendered Compose app shell, the A06 map card's explicit “Google Maps is not configured” state, and the Android system “Process system isn't responding” dialog.
+- No `local.properties`, `MAPS_API_KEY` Gradle property, or `GOOGLE_MAPS_API_KEY` environment value was available. The APK therefore had no usable key; live map rendering, pan, and zoom were not tested.
+- The observed `AndroidRuntime` fatal log was for the `uiautomator` process timing out while connecting to `UiAutomation`, not an application-process crash. However, the visible system ANR dialog means emulator responsiveness did not pass.
+
+Self-audit:
+- Camera audit: PASS — the app manifest has no camera permission; inspected implementation/configuration contains no CameraX, Camera2, CameraManager, camera intent/API, capture or preview UI, or camera dependency.
+- Scope audit: PASS — A07 coordinate selection, marker/click handling, and coordinate state are absent. No A08 address/geocoding, A09 date/time, A10 QR, A11 map snapshot, A12 compositor, A13 final preview, A14 MediaStore save, A15 Sharesheet, or A16+ Firebase implementation was added.
+- Secrets/configuration: PASS — no API key value or Google/Firebase credential was present in tracked changes. Cloud project, billing, API enablement, and key restrictions remain unknown/unverified.
+- Dependency/scope review: PASS — only the required Maps Compose SDK was added for A06; no Places, Routes, Static Maps, Firebase, or unrelated service was added.
+- `git diff --check` — PASS.
+- No A06 source edits were needed after validation; the status ledger is updated to preserve the blocked result.
+
+Known limitations / blockers:
+- A valid Google Cloud project with Maps SDK for Android enabled, billing as required, and an appropriately restricted API key is not configured in this environment.
+- Emulator instability/system ANR prevents claiming a responsive runtime pass.
+- Lint analysis did not finish; its result remains blocked rather than passed.
+
+Next action:
+- Configure a valid restricted Maps key through an untracked local setting, rebuild and install that APK, then verify the actual map renders and pan/zoom works on a responsive emulator. Repeat relevant A04/A05 regressions before marking A06 VERIFIED. Do not start A07 until A06 is verified.
 
 ---
 
@@ -535,44 +585,51 @@ Last Updated:
 
 Do not erase useful historical evidence merely to make the file shorter.
 
-Current Task: Pre-A06 audit of A01-A05
+Current Task: A06 — Google Maps SDK integration
 
-Status: VERIFIED
+Status: BLOCKED
 
 Completed:
-- Audited A01-A05 against the project contracts, actual source/configuration, build state, and Git history.
-- Fixed cancellation-time bitmap ownership, removed an unused bootstrap resource, and corrected the README's machine-specific JDK path.
-- Retained A01-A05 VERIFIED with prior functional evidence and accurately documented current emulator/lint limitations.
+- Audited A01-A05 against the project contracts, actual source/configuration, build state, and Git history; the audit corrections are recorded in the earlier pre-A06 audit and local commit `9e601f8`.
+- Added the Maps Compose dependency, local API-key configuration path, manifest metadata, conditional native map surface, and README setup guidance.
+- Built and installed the new debug APK on `emulator-5554`; confirmed the app process remained alive and MainActivity was top-resumed.
+- Captured the Compose UI showing the Maps-unconfigured message and the system ANR dialog.
 
 Remaining:
-- Begin A06 — Google Maps SDK integration; do not implement A07+.
+- Supply a valid restricted Maps SDK key/project configuration and verify actual map rendering plus pan/zoom at runtime.
+- Repeat the relevant A04/A05 runtime regressions when the emulator is responsive.
+- Re-run lint if the analyzer stall can be resolved.
+- Do not implement A07+.
 
 Files Changed:
-- `app/src/main/res/values/strings.xml`
-- `app/src/main/java/com/geotagphotogenerator/PhotoPreview.kt`
+- `app/build.gradle.kts`
+- `app/src/main/AndroidManifest.xml`
+- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/src/main/java/com/geotagphotogenerator/GoogleMapCard.kt`
+- `gradle/libs.versions.toml`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `.\gradlew.bat --no-daemon assembleDebug --console=plain` passed (`BUILD SUCCESSFUL in 1m 11s`).
-- `.\gradlew.bat --no-daemon test --console=plain` passed (`BUILD SUCCESSFUL in 1m 14s`; unit-test source sets are `NO-SOURCE`).
-- `.\gradlew.bat --no-daemon lintDebug --console=plain` stalled at `:app:lintAnalyzeDebug` for 180 seconds and was canceled; lint is not a pass.
-- Latest APK (`app/build/outputs/apk/debug/app-debug.apk`, SHA-256 `08D71643AF59E2D402AABE3EBFC29A13CCA1A783F29218439011A2AB99553F7E`) installed successfully. MainActivity was top-resumed and the Compose UI was visible; the emulator later showed an input-focus ANR under heavy system/compositor load. No app AndroidRuntime fatal log was found.
-- The Photo Picker opened and Back returned to the app, but repeat image selection was not verified in this audit pass because the emulator stopped responding. Earlier A04/A05 records contain successful selection, rendering, replacement, cancellation, and corrupt-image handling.
-- Earlier A05 runtime checks covered large images, orientation/aspect ratio, replacement, and preview-error recovery. Android 9+ `ImageDecoder` was exercised; the Android 6-8 fallback is compile-checked only.
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS (`BUILD SUCCESSFUL in 9m 19s`).
+- `.\gradlew.bat --no-daemon test --console=plain` — PASS (`BUILD SUCCESSFUL in 1m 22s`; test sources are `NO-SOURCE`).
+- `.\gradlew.bat --no-daemon lintDebug --console=plain` — BLOCKED after a 180-second stall at `:app:lintAnalyzeDebug`; canceled, not a pass.
+- New APK SHA-256: `D7D69EB6108F201FDD673012BAA21789B81AC76E8B69B8B5EB173069C2FE7BA9`; installation succeeded.
+- Map rendering and pan/zoom remain unverified because no key is configured.
 
 Self-Audit:
-- Fixed bounds-only decode validation and cancellation-time bitmap handoff cleanup; replaced/disposed bitmaps and streams remain released.
-- Removed unused `bootstrap_message`; changed README setup to avoid a local machine's hard-coded JDK path.
-- No camera permission/API/dependency/UI, secret-shaped Maps key, broad storage permission, or A06+ implementation was found before starting A06.
-- The cost/billing document remains its approved template.
+- Camera-free audit: PASS.
+- A07+ scope audit: PASS; no features beyond the A06 map integration were found.
+- Diff whitespace check: PASS.
+- Runtime is incomplete: the screen rendered but a system ANR appeared; do not claim a responsive runtime pass.
 
 Blockers:
-- Current emulator interaction is limited by repeat system/app input-focus ANRs and unusually high system/compositor load; earlier A04/A05 selection checks remain recorded.
-- No unit-test source files currently exist; the Gradle `test` task passed with `NO-SOURCE`.
+- No valid Google Maps API key, project, billing/API configuration, or restriction setup is available.
+- `emulator-5554` showed a system ANR; its UI automation also timed out.
+- Lint analysis stalled at `:app:lintAnalyzeDebug`.
 
 Next Action:
-- Implement A06 — Google Maps SDK integration; no coordinate selection or A07+ work.
+- Configure a valid restricted Maps SDK key without tracking it, rebuild/install, and verify real map rendering and pan/zoom on a responsive emulator; repeat A04/A05 regression checks. Stop before A07.
 
 Last Updated: 2026-10-03
 

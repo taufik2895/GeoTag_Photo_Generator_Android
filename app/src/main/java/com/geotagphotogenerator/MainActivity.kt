@@ -171,6 +171,8 @@ private fun CompactLayout(
                 height = 220.dp,
             )
 
+            GoogleMapCard(modifier = Modifier.fillMaxWidth())
+
             selectionError?.let { error ->
                 Text(
                     text = error,
@@ -268,6 +270,8 @@ private fun WideLayout(
 
                 WorkflowSteps(workflowSteps, modifier = Modifier.weight(1f))
             }
+
+            GoogleMapCard(modifier = Modifier.fillMaxWidth())
 
             selectionError?.let { error ->
                 Text(

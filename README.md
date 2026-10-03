@@ -13,9 +13,11 @@ Native Android application for generating locally processed GeoTag images from a
 - A05 decodes the selected image off the main thread into a bounded-size preview, applies image orientation, and displays loading, empty, and error states.
 - Replaced and disposed preview bitmaps are released; invalid, unavailable, and too-large images show an in-app error instead of crashing.
 - Picker cancellation preserves any previously selected photo and preview.
+- A06 integrates the Google Maps Compose SDK with a real map surface, default Jakarta camera position, and SDK pan/zoom controls when a valid local Maps API key is configured.
+- Without a configured key, the app shows an explicit Maps configuration message instead of a fake map. Map runtime access is not yet verified in the current environment.
 - No camera permission or camera-related code is present.
 
-Google Maps integration, coordinate selection, address resolution, date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
+Coordinate selection, address resolution, date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 
@@ -31,9 +33,19 @@ Install JDK 17 and Android SDK Platform 36 with Build-Tools 36.1.0. Configure `J
 .\gradlew.bat assembleDebug
 ```
 
+## Google Maps local configuration
+
+To load the real map, create a Google Cloud API key with Maps SDK for Android enabled and appropriate Android-app/API restrictions. Supply the key locally using `local.properties`:
+
+```properties
+MAPS_API_KEY=replace_with_your_restricted_key
+```
+
+`local.properties` is ignored by Git. The build also accepts the `MAPS_API_KEY` Gradle property or the `GOOGLE_MAPS_API_KEY` environment variable. Do not put a real key in tracked source or documentation; restrict it to this Android package/signing certificate and the Maps SDK for Android. The API key is included in the installed app manifest as required by the SDK, so it must be restricted. Google Cloud project, billing, key restrictions, and live map rendering have not been verified in this environment.
+
 ## Privacy and permissions
 
-The current app uses Android Photo Picker’s per-item URI grant; it does not request broad storage access. Photo access validation and preview decoding remain on-device. No network-facing product service is implemented. Camera support remains prohibited and absent.
+The current app uses Android Photo Picker’s per-item URI grant; it does not request broad storage access. Photo access validation and preview decoding remain on-device. When configured, Google Maps SDK retrieves map content over the network; photos are not uploaded and there is no custom backend. Camera support remains prohibited and absent.
 
 ## Known limitations
 
