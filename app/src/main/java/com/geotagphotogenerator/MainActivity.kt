@@ -76,6 +76,9 @@ private fun GeoTagPhotoGeneratorApp() {
     var selectedPhotoMimeType by rememberSaveable { mutableStateOf<String?>(null) }
     var photoPreviewRequestId by rememberSaveable { mutableStateOf(0) }
     var selectionError by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedCoordinate by rememberSaveable(stateSaver = MapCoordinateSaver) {
+        mutableStateOf<MapCoordinate?>(null)
+    }
     val scope = rememberCoroutineScope()
 
     val photoPicker = rememberLauncherForActivityResult(
@@ -123,6 +126,8 @@ private fun GeoTagPhotoGeneratorApp() {
                 selectedPhotoMimeType = selectedPhotoMimeType,
                 photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
+                selectedCoordinate = selectedCoordinate,
+                onCoordinateSelected = { selectedCoordinate = it },
                 onSelectPhoto = selectPhoto,
             )
         } else {
@@ -131,6 +136,8 @@ private fun GeoTagPhotoGeneratorApp() {
                 selectedPhotoMimeType = selectedPhotoMimeType,
                 photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
+                selectedCoordinate = selectedCoordinate,
+                onCoordinateSelected = { selectedCoordinate = it },
                 onSelectPhoto = selectPhoto,
             )
         }
@@ -143,6 +150,8 @@ private fun CompactLayout(
     selectedPhotoMimeType: String?,
     photoPreviewRequestId: Int,
     selectionError: String?,
+    selectedCoordinate: MapCoordinate?,
+    onCoordinateSelected: (MapCoordinate) -> Unit,
     onSelectPhoto: () -> Unit,
 ) {
     val workflowSteps = listOf(
@@ -171,7 +180,11 @@ private fun CompactLayout(
                 height = 220.dp,
             )
 
-            GoogleMapCard(modifier = Modifier.fillMaxWidth())
+            GoogleMapCard(
+                modifier = Modifier.fillMaxWidth(),
+                selectedCoordinate = selectedCoordinate,
+                onCoordinateSelected = onCoordinateSelected,
+            )
 
             selectionError?.let { error ->
                 Text(
@@ -210,6 +223,8 @@ private fun WideLayout(
     selectedPhotoMimeType: String?,
     photoPreviewRequestId: Int,
     selectionError: String?,
+    selectedCoordinate: MapCoordinate?,
+    onCoordinateSelected: (MapCoordinate) -> Unit,
     onSelectPhoto: () -> Unit,
 ) {
     val workflowSteps = listOf(
@@ -271,7 +286,11 @@ private fun WideLayout(
                 WorkflowSteps(workflowSteps, modifier = Modifier.weight(1f))
             }
 
-            GoogleMapCard(modifier = Modifier.fillMaxWidth())
+            GoogleMapCard(
+                modifier = Modifier.fillMaxWidth(),
+                selectedCoordinate = selectedCoordinate,
+                onCoordinateSelected = onCoordinateSelected,
+            )
 
             selectionError?.let { error ->
                 Text(

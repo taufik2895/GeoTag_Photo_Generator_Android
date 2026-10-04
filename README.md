@@ -14,10 +14,11 @@ Native Android application for generating locally processed GeoTag images from a
 - Replaced and disposed preview bitmaps are released; invalid, unavailable, and too-large images show an in-app error instead of crashing.
 - Picker cancellation preserves any previously selected photo and preview.
 - A06 integrates the Google Maps Compose SDK with a real map surface, default Jakarta camera position, and SDK pan/zoom controls when a valid local Maps API key is configured.
-- Without a configured key, the app shows an explicit Maps configuration message instead of a fake map. Map runtime access is not yet verified in the current environment.
+- Without a configured key, the app deterministically uses an osmdroid development fallback backed by OpenStreetMap MAPNIK tiles. It supports map rendering, pan, and zoom for development only; it is not Google Maps and does not validate the production Google Maps path.
+- A07 lets the user select a map point, displays one marker at the selected coordinate, and shows its latitude/longitude. The same saveable `MapCoordinate` state is used for either map provider; the initial Jakarta camera position is not treated as a user selection.
 - No camera permission or camera-related code is present.
 
-Coordinate selection, address resolution, date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
+Address resolution, date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 
@@ -45,8 +46,8 @@ MAPS_API_KEY=replace_with_your_restricted_key
 
 ## Privacy and permissions
 
-The current app uses Android Photo Picker’s per-item URI grant; it does not request broad storage access. Photo access validation and preview decoding remain on-device. When configured, Google Maps SDK retrieves map content over the network; photos are not uploaded and there is no custom backend. Camera support remains prohibited and absent.
+The current app uses Android Photo Picker’s per-item URI grant; it does not request broad storage access. Photo access validation and preview decoding remain on-device. Google Maps and the development fallback retrieve map content over the network; photos are not uploaded and there is no custom backend. Camera support remains prohibited and absent.
 
 ## Known limitations
 
-The app previews selected images but does not generate or save a final GeoTag image. Preview decoding is bounded in size; the full-resolution compositor and later map, metadata, generation, save, and share workflow features remain unimplemented.
+The app previews selected images and retains a manually selected map coordinate but does not generate or save a final GeoTag image. Preview decoding is bounded in size; metadata, full-resolution composition, save, and share workflow features remain unimplemented. Live Google Maps rendering still requires a valid restricted local API key and has not been verified in this environment.

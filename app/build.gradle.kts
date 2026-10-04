@@ -68,6 +68,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.exifinterface)
     implementation(libs.maps.compose)
+    implementation(libs.osmdroid.android)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
