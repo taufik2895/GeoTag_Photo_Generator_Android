@@ -73,9 +73,45 @@ The application must not use:
 
 Photo input is through Android Photo Picker / system picker.
 
-### 3.3 Google Maps
+### 3.3 Google Maps and development-only fallback
 
-Use the official Google Maps SDK for Android.
+Use the official Google Maps SDK for Android as the production map provider.
+
+The project should avoid adding unnecessary Google Maps Platform APIs.
+
+Approved location/map behavior:
+
+- A one-time device-location fix may center the interactive map. Request
+  only contextual `ACCESS_COARSE_LOCATION`; do not add background
+  tracking, location history, or location transmission.
+- Reverse geocoding uses the manually selected coordinate and should
+  prefer Android `Geocoder`; the selected coordinate remains authoritative.
+- Interactive map styles must be supported by the active provider. The
+  development fallback may expose only NORMAL.
+- The final generated mini-map must explicitly use SATELLITE regardless
+  of interactive map appearance. Do not add Static Maps API or use
+  unofficial tiles/tile scraping as a shortcut.
+
+A temporary **osmdroid development fallback** is permitted only when a
+valid Google Maps configuration is unavailable during development.
+
+This fallback does NOT change the production architecture.
+
+Rules:
+
+- Valid Google Maps configuration -> Google Maps SDK for Android.
+- Missing Google Maps configuration -> osmdroid may be used only for
+  development/runtime work.
+- Google Maps implementation must remain in the repository even when
+  the key is unavailable.
+- Google Maps and osmdroid must never be initialized simultaneously.
+- osmdroid must never be presented as the production map provider.
+- osmdroid must never be used to bypass Google Maps billing, quotas,
+  licensing, API restrictions, or other production requirements.
+- Standard OpenStreetMap tiles used by osmdroid are development-only
+  and must not be described as Google Maps data.
+- Final production cost/billing audit must still include the actual
+  Google Maps production dependency and configuration.
 
 The project should avoid adding unnecessary Google Maps Platform APIs.
 
@@ -312,6 +348,23 @@ If a monetary fee or policy requirement is relevant, verify the current official
 
 The agent must inspect the final Gradle configuration and identify:
 
+### Map-provider dependency rule
+
+If osmdroid is present, audit it separately from Google Maps.
+
+Record:
+
+- exact osmdroid version actually used;
+- whether it is development-only;
+- where provider selection is implemented;
+- evidence that Google Maps remains the production provider;
+- evidence that both providers are not initialized simultaneously;
+- evidence that no Google tile scraping or unofficial Google endpoint is used.
+
+Do not classify osmdroid as a Google Maps Platform service and do not
+use its presence to claim that Google Maps production requirements have
+been satisfied.
+
 ### Keep
 
 Dependencies that are:
@@ -339,6 +392,12 @@ Record findings:
 | `[fill]` | `[yes/no]` | `[fill]` | `[fill]` | `[fill]` |
 
 ---
+
+### Development-only dependencies
+
+If osmdroid is retained in the final repository solely for development,
+record it as a development dependency rather than a production map
+service. If it is removed before release, record that removal.
 
 # 11. CONSIDERED BUT NOT USED
 
@@ -541,6 +600,10 @@ Must describe the actual finished project and setup instructions.
 ### `DEVELOPER-COSTS-AND-BILLING.md`
 
 This document records the **actual final cost/billing audit** after implementation. It must not be used as a substitute for the Source of Truth and must not be populated with assumptions before the project is runnable.
+
+The osmdroid development fallback does not remove the need to audit
+the production Google Maps dependency/configuration. It is a development
+architecture aid, not a billing-avoidance mechanism.
 
 ---
 

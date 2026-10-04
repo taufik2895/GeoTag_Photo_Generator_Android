@@ -56,6 +56,42 @@ Never commit:
 - passwords,
 - tokens.
 
+### MAP PROVIDER POLICY
+
+Google Maps SDK for Android is the production map provider.
+
+osmdroid is permitted only as a temporary development fallback when
+Google Maps configuration is unavailable.
+
+Rules:
+
+- Never remove Google Maps implementation because a key is missing.
+- Never replace Google Maps production architecture with osmdroid.
+- When a valid Google Maps key/configuration exists, use Google Maps.
+- When the key/configuration is unavailable, osmdroid may be used only
+  for development/runtime fallback testing.
+- Never initialize Google Maps and osmdroid simultaneously.
+- Both providers must consume the same `latitude: Double` and
+  `longitude: Double` coordinate model.
+- Keep `deviceLocation`, camera position, and user-selected coordinate
+  separate. A one-time device location may center the initial map only;
+  it must never select or move the GeoTag marker.
+- Request only contextual `ACCESS_COARSE_LOCATION`; denial/unavailability
+  must leave the map usable at the deterministic default
+  `(-6.2088, 106.8456)`. No background tracking or location history.
+- Interactive Google Maps appearance may be NORMAL, SATELLITE, TERRAIN,
+  or HYBRID. The current osmdroid fallback supports only NORMAL; mark
+  other styles unavailable instead of simulating them.
+- The final generated mini-map must explicitly use SATELLITE regardless
+  of interactive appearance. Do not use Static Maps API, scrape tiles,
+  or bypass billing.
+- Reverse geocoding must use `selectedCoordinate`, never device location
+  or camera center.
+- Never use osmdroid to bypass Google Maps billing or requirements.
+- Never scrape Google map tiles or use unofficial Google map endpoints.
+- A passing osmdroid test is not evidence that Google Maps runtime works.
+- Final production/release validation must verify real Google Maps.
+
 ---
 
 ## 2. Required Technology
@@ -66,7 +102,8 @@ Use:
 - Jetpack Compose
 - Material 3
 - Material 3 Adaptive where appropriate
-- Google Maps SDK for Android
+- Google Maps SDK for Android as the production map provider
+- osmdroid only as a temporary development fallback when Google Maps configuration is unavailable
 - Android Photo Picker
 - Bitmap + Canvas
 - local QR generation
@@ -197,7 +234,14 @@ If an emulator/device is available, verify:
 - no camera permission,
 - Photo Picker,
 - photo selection,
-- map,
+- map;
+- if Google Maps is configured, real Google Maps rendering;
+- if Google Maps is not configured, development-only osmdroid fallback;
+- pan/zoom for the active provider;
+- no simultaneous provider initialization;
+- one-time coarse location grant/denial and deterministic fallback;
+- style changes preserve the selected coordinate and marker;
+- address resolution uses the selected coordinate and handles failures;
 - coordinate selection,
 - date/time,
 - image generation,
@@ -241,6 +285,10 @@ Do not jump ahead merely to create UI demos.
 ## 9. Cost Discipline
 
 Use the least expensive compliant Google architecture.
+
+The development-only osmdroid fallback is NOT a billing workaround.
+It must never be used to avoid, bypass, or misrepresent Google Maps
+production requirements.
 
 Avoid:
 
@@ -389,4 +437,3 @@ It remains a template until:
 - initial validation passes.
 
 Only then perform the actual cost/billing audit using current official provider documentation.
-

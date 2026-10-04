@@ -57,7 +57,8 @@ Use:
 - Jetpack Compose
 - Material 3
 - Material 3 Adaptive where appropriate
-- Google Maps SDK for Android
+- Google Maps SDK for Android as the production map provider
+- osmdroid only as a temporary development fallback when Google Maps configuration is unavailable
 - Android Photo Picker / system picker
 - Android Bitmap + Canvas
 - local QR generation
@@ -165,6 +166,73 @@ Do not use:
 
 Google Cloud billing/API configuration is required for Google Maps SDK usage. Keep API keys restricted and never commit secrets.
 
+### 3.1 Map Provider Policy — Production vs Development
+
+The production map architecture is **Google Maps SDK for Android**.
+
+The project also permits **osmdroid only as a temporary development fallback** when a valid Google Maps configuration is not available in the development environment.
+
+```text
+Valid Google Maps configuration
+        ↓
+Google Maps SDK for Android
+        ↓
+Production provider
+
+No valid Google Maps configuration
+        ↓
+osmdroid + standard OpenStreetMap tiles
+        ↓
+Development-only fallback
+```
+
+Mandatory rules:
+
+1. Google Maps SDK remains the production provider.
+2. Missing `MAPS_API_KEY` / `GOOGLE_MAPS_API_KEY` must NOT cause Google Maps code, dependencies, functions, configuration, or architecture to be deleted.
+3. When a valid Google Maps configuration is available, Google Maps MUST be used.
+4. When Google Maps configuration is unavailable, osmdroid MAY be used only to continue development and runtime testing of map-related UI behavior.
+5. Google Maps and osmdroid MUST NOT be initialized simultaneously for the same map surface.
+6. Both providers must use the same provider-independent coordinate model: `latitude: Double` and `longitude: Double`.
+7. osmdroid MUST NOT become the production provider.
+8. osmdroid MUST NOT be used to bypass Google Maps billing, licensing, quotas, API restrictions, or other Google Maps requirements.
+9. Do not scrape Google map tiles or use unofficial Google map endpoints.
+10. Standard OpenStreetMap/osmdroid development tiles must remain clearly separated from production Google Maps behavior.
+11. Final production/release validation MUST include real Google Maps SDK validation when valid Google Maps configuration is available.
+12. A successful osmdroid fallback test MUST NOT be reported as successful Google Maps validation.
+
+The fallback is an operational development rule, not a change to the production product decision.
+
+### 3.2 Initial device location and map appearance
+
+The app may use one device-location fix to center the initial interactive
+map. Keep these concepts separate:
+
+- `deviceLocation` may center the initial camera only.
+- `mapCameraPosition` is the viewport and may change through pan/zoom.
+- `selectedCoordinate` is set only by a user map tap and is the
+  authoritative GeoTag coordinate.
+
+Device location must never automatically set the selected coordinate or
+marker, and must never be used for reverse geocoding, QR content, or
+generated-image coordinates. Request only contextual
+`ACCESS_COARSE_LOCATION`. If permission is declined or location is
+unavailable, keep the map usable at the deterministic default
+`(-6.2088, 106.8456)`. Retry only after explicit user action. Do not add
+background location, continuous tracking, or location history.
+
+Interactive map appearance may be NORMAL, SATELLITE, TERRAIN, or HYBRID
+when supported by the active provider. Google Maps maps these to native
+map types. The osmdroid development fallback supports only NORMAL;
+unsupported styles must be visibly unavailable, not simulated. Changing
+appearance must preserve the selected coordinate and must not initialize
+another provider.
+
+The final generated mini-map is independent of interactive appearance
+and must explicitly use SATELLITE. Do not use Static Maps API, scrape
+tiles, or bypass Google Maps requirements. Production satellite output
+remains unverified until validated with real Google Maps configuration.
+
 ### Mini-map
 
 Prefer an officially supported Android Google Maps rendering/snapshot approach such as `GoogleMap.snapshot()` when suitable and compliant.
@@ -188,6 +256,10 @@ If an address is unavailable:
 - keep the coordinate usable,
 - show a clear fallback,
 - never fabricate address data.
+
+Reverse geocoding must use only the user's `selectedCoordinate`, never
+`deviceLocation` or the map camera center. Latitude and longitude remain
+authoritative when address lookup is unavailable or fails.
 
 Do not add Places API merely for reverse geocoding unless technically justified and explicitly approved.
 
@@ -494,6 +566,9 @@ Do not add:
 - Places search/autocomplete
 - Routes
 - custom billing-monitor backend
+- osmdroid as a production map provider
+
+Development-only osmdroid fallback is permitted only under the Map Provider Policy in Section 3.1 and is not considered a production architecture change.
 
 unless explicitly approved later.
 
@@ -523,6 +598,11 @@ unless explicitly approved later.
 - User can select a coordinate.
 - Marker is visible.
 - Latitude/longitude update correctly.
+- If Google Maps configuration is unavailable during development, the approved osmdroid fallback may be used for development-only map rendering and pan/zoom validation.
+- The fallback must never be treated as production Google Maps validation.
+- Google Maps and osmdroid are never initialized simultaneously.
+- The same `Double` latitude/longitude model can be consumed by either provider.
+- Final release validation verifies the real Google Maps provider.
 
 ### Date/Time
 
@@ -690,6 +770,8 @@ The web prototype is reference material only.
 
 Prefer official Android/Google APIs, local processing, minimal dependencies, privacy-preserving architecture, low recurring infrastructure cost, maintainable Kotlin, and Play Store compatibility.
 
+For maps, Google Maps SDK for Android remains the production provider. osmdroid is permitted only as a temporary development fallback when Google Maps configuration is unavailable; it must never replace or obscure the production Google Maps architecture.
+
 ---
 
 ## 21. Session Continuity / Token Exhaustion
@@ -712,4 +794,3 @@ If an AI session ends because of token/context limits or another interruption, t
 An incomplete task must remain `IN_PROGRESS`, `BLOCKED`, or `FAILED` as appropriate. It must never be marked `VERIFIED` merely because code exists.
 
 Before a substantial session ends, the agent must update `IMPLEMENTATION_STATUS.md` with completed work, remaining work, validation, self-audit, blockers, and the exact next action.
-

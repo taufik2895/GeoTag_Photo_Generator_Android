@@ -16,9 +16,12 @@ Native Android application for generating locally processed GeoTag images from a
 - A06 integrates the Google Maps Compose SDK with a real map surface, default Jakarta camera position, and SDK pan/zoom controls when a valid local Maps API key is configured.
 - Without a configured key, the app deterministically uses an osmdroid development fallback backed by OpenStreetMap MAPNIK tiles. It supports map rendering, pan, and zoom for development only; it is not Google Maps and does not validate the production Google Maps path.
 - A07 lets the user select a map point, displays one marker at the selected coordinate, and shows its latitude/longitude. The same saveable `MapCoordinate` state is used for either map provider; the initial Jakarta camera position is not treated as a user selection.
+- If coarse location permission is already granted, the app makes one location request to center the initial map only. Otherwise it keeps the deterministic default center; the user can explicitly request approximate device location from the map. Device location never selects the GeoTag coordinate.
+- Interactive map appearance offers Normal, Satellite, Terrain, and Hybrid with Google Maps. The osmdroid development fallback supports Normal only and marks other styles unavailable.
+- A08 resolves an address from the manually selected coordinate using Android `Geocoder`; the coordinate remains valid when address lookup is unavailable or fails.
 - No camera permission or camera-related code is present.
 
-Address resolution, date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. Their status is recorded in `IMPLEMENTATION_STATUS.md`.
+Date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. The final generated mini-map is future work and must always explicitly use Satellite independently of the interactive map style. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 
@@ -46,8 +49,8 @@ MAPS_API_KEY=replace_with_your_restricted_key
 
 ## Privacy and permissions
 
-The current app uses Android Photo Picker’s per-item URI grant; it does not request broad storage access. Photo access validation and preview decoding remain on-device. Google Maps and the development fallback retrieve map content over the network; photos are not uploaded and there is no custom backend. Camera support remains prohibited and absent.
+The current app uses Android Photo Picker’s per-item URI grant; it does not request broad storage access. Photo access validation and preview decoding remain on-device. The optional one-time approximate device-location permission is foreground-only and is used only for initial map centering; reverse geocoding uses the selected coordinate. Google Maps and the development fallback retrieve map content over the network; photos are not uploaded and there is no custom backend. Camera support remains prohibited and absent.
 
 ## Known limitations
 
-The app previews selected images and retains a manually selected map coordinate but does not generate or save a final GeoTag image. Preview decoding is bounded in size; metadata, full-resolution composition, save, and share workflow features remain unimplemented. Live Google Maps rendering still requires a valid restricted local API key and has not been verified in this environment.
+The app previews selected images, retains a manually selected map coordinate, and displays an address when Android Geocoder is available; it does not generate or save a final GeoTag image. Preview decoding is bounded in size; metadata, full-resolution composition, save, and share workflow features remain unimplemented. Live Google Maps rendering still requires a valid restricted local API key and has not been verified in this environment.

@@ -6,12 +6,18 @@ import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
@@ -22,8 +28,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.google.android.gms.maps.model.CameraPosition
 import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.MapType
 import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MapProperties
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.google.maps.android.compose.rememberUpdatedMarkerState
@@ -36,6 +44,33 @@ import org.osmdroid.views.overlay.Marker as OsmdroidMarker
 internal data class MapCoordinate(
     val latitude: Double,
     val longitude: Double,
+)
+
+internal enum class MapDisplayType {
+    NORMAL,
+    SATELLITE,
+    TERRAIN,
+    HYBRID,
+}
+
+internal enum class AddressStatus {
+    IDLE,
+    LOADING,
+    RESOLVED,
+    UNAVAILABLE,
+    NOT_FOUND,
+    ERROR,
+    TIMEOUT,
+}
+
+internal data class MapCardState(
+    val selectedCoordinate: MapCoordinate?,
+    val deviceLocation: MapCoordinate?,
+    val mapDisplayType: MapDisplayType,
+    val addressText: String?,
+    val addressStatus: AddressStatus,
+    val isLocatingDevice: Boolean,
+    val locationMessage: String?,
 )
 
 internal val MapCoordinateSaver = Saver<MapCoordinate?, List<Double>>(
@@ -54,9 +89,13 @@ private const val defaultMapZoom = 10.0
 internal fun GoogleMapCard(
     modifier: Modifier = Modifier,
     mapHeight: Dp = 280.dp,
-    selectedCoordinate: MapCoordinate?,
+    mapState: MapCardState,
     onCoordinateSelected: (MapCoordinate) -> Unit = {},
+    onMapDisplayTypeChanged: (MapDisplayType) -> Unit,
+    onUseDeviceLocation: () -> Unit,
 ) {
+    val usesGoogleMaps = BuildConfig.MAPS_API_KEY_CONFIGURED
+    val selectedCoordinate = mapState.selectedCoordinate
     Column(
         modifier = modifier,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -67,17 +106,62 @@ internal fun GoogleMapCard(
             color = MaterialTheme.colorScheme.onSurface,
         )
 
-        if (BuildConfig.MAPS_API_KEY_CONFIGURED) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            MapDisplayType.values().forEach { displayType ->
+                FilterChip(
+                    selected = mapState.mapDisplayType == displayType,
+                    enabled = usesGoogleMaps || displayType == MapDisplayType.NORMAL,
+                    onClick = { onMapDisplayTypeChanged(displayType) },
+                    label = { Text(displayType.name.lowercase().replaceFirstChar(Char::uppercase)) },
+                )
+            }
+        }
+
+        if (!usesGoogleMaps) {
+            Text(
+                text = "Only Normal map appearance is available in the development map.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+
+        if (usesGoogleMaps) {
             ProductionGoogleMap(
                 modifier = Modifier.fillMaxWidth().height(mapHeight),
                 selectedCoordinate = selectedCoordinate,
+                deviceLocation = mapState.deviceLocation,
+                mapDisplayType = mapState.mapDisplayType,
                 onCoordinateSelected = onCoordinateSelected,
             )
         } else {
             OsmdroidDevelopmentMap(
                 modifier = Modifier.fillMaxWidth().height(mapHeight),
                 selectedCoordinate = selectedCoordinate,
+                deviceLocation = mapState.deviceLocation,
                 onCoordinateSelected = onCoordinateSelected,
+            )
+        }
+
+        TextButton(
+            onClick = onUseDeviceLocation,
+            enabled = !mapState.isLocatingDevice,
+        ) {
+            Text(
+                if (mapState.isLocatingDevice) "Finding device location…"
+                else "Use device location",
+            )
+        }
+
+        mapState.locationMessage?.let { message ->
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -104,6 +188,41 @@ internal fun GoogleMapCard(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                when (mapState.addressStatus) {
+                    AddressStatus.LOADING -> Text(
+                        text = "Resolving address…",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AddressStatus.RESOLVED -> mapState.addressText?.let { address ->
+                        Text(
+                            text = address,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    AddressStatus.UNAVAILABLE -> Text(
+                        text = "Address unavailable. The selected coordinates remain valid.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AddressStatus.NOT_FOUND -> Text(
+                        text = "No address found. The selected coordinates remain valid.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AddressStatus.ERROR -> Text(
+                        text = "Address lookup failed. The selected coordinates remain valid.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    AddressStatus.TIMEOUT -> Text(
+                        text = "Address lookup timed out. The selected coordinates remain valid.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    AddressStatus.IDLE -> Unit
+                }
             }
         }
     }
@@ -113,6 +232,8 @@ internal fun GoogleMapCard(
 private fun ProductionGoogleMap(
     modifier: Modifier,
     selectedCoordinate: MapCoordinate?,
+    deviceLocation: MapCoordinate?,
+    mapDisplayType: MapDisplayType,
     onCoordinateSelected: (MapCoordinate) -> Unit,
 ) {
     val cameraPositionState = rememberCameraPositionState {
@@ -125,10 +246,21 @@ private fun ProductionGoogleMap(
         MapUiSettings(zoomControlsEnabled = true)
     }
 
+    LaunchedEffect(deviceLocation, selectedCoordinate) {
+        if (selectedCoordinate == null) {
+            val initialCenter = deviceLocation ?: defaultMapCoordinate
+            cameraPositionState.position = CameraPosition.fromLatLngZoom(
+                initialCenter.toLatLng(),
+                defaultMapZoom.toFloat(),
+            )
+        }
+    }
+
     GoogleMap(
         modifier = modifier,
         cameraPositionState = cameraPositionState,
         uiSettings = mapUiSettings,
+        properties = MapProperties(mapType = mapDisplayType.googleMapType),
         onMapClick = { clickedLocation ->
             onCoordinateSelected(clickedLocation.toMapCoordinate())
         },
@@ -146,6 +278,7 @@ private fun ProductionGoogleMap(
 private fun OsmdroidDevelopmentMap(
     modifier: Modifier,
     selectedCoordinate: MapCoordinate?,
+    deviceLocation: MapCoordinate?,
     onCoordinateSelected: (MapCoordinate) -> Unit,
 ) {
     val context = LocalContext.current
@@ -158,7 +291,7 @@ private fun OsmdroidDevelopmentMap(
             setMultiTouchControls(true)
             controller.setZoom(defaultMapZoom)
             controller.setCenter(
-                selectedCoordinate?.toGeoPoint() ?: defaultMapCoordinate.toGeoPoint(),
+                deviceLocation?.toGeoPoint() ?: defaultMapCoordinate.toGeoPoint(),
             )
             val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
             var downX = 0f
@@ -225,6 +358,12 @@ private fun OsmdroidDevelopmentMap(
         }
     }
 
+    LaunchedEffect(deviceLocation, selectedCoordinate) {
+        if (deviceLocation != null && selectedCoordinate == null) {
+            mapView.controller.setCenter(deviceLocation.toGeoPoint())
+        }
+    }
+
     AndroidView(
         factory = { mapContainer },
         modifier = modifier,
@@ -257,4 +396,10 @@ private fun MapCoordinate.toGeoPoint() = GeoPoint(latitude, longitude)
 
 private fun LatLng.toMapCoordinate() = MapCoordinate(latitude, longitude)
 
-private fun GeoPoint.toMapCoordinate() = MapCoordinate(latitude, longitude)
+private val MapDisplayType.googleMapType: MapType
+    get() = when (this) {
+        MapDisplayType.NORMAL -> MapType.NORMAL
+        MapDisplayType.SATELLITE -> MapType.SATELLITE
+        MapDisplayType.TERRAIN -> MapType.TERRAIN
+        MapDisplayType.HYBRID -> MapType.HYBRID
+    }

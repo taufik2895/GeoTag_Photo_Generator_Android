@@ -1,6 +1,8 @@
 package com.geotagphotogenerator
 
+import android.Manifest
 import android.content.ContentResolver
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -8,6 +10,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.AlertDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,7 +35,9 @@ import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,8 +54,13 @@ import androidx.compose.ui.unit.dp
 import com.geotagphotogenerator.ui.theme.GeoTagPhotoGeneratorTheme
 import java.io.FileNotFoundException
 import java.io.IOException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
@@ -71,7 +81,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 private fun GeoTagPhotoGeneratorApp() {
-    val contentResolver = LocalContext.current.contentResolver
+    val context = LocalContext.current
+    val contentResolver = context.contentResolver
     var selectedPhotoUri by rememberSaveable { mutableStateOf<Uri?>(null) }
     var selectedPhotoMimeType by rememberSaveable { mutableStateOf<String?>(null) }
     var photoPreviewRequestId by rememberSaveable { mutableStateOf(0) }
@@ -79,7 +90,111 @@ private fun GeoTagPhotoGeneratorApp() {
     var selectedCoordinate by rememberSaveable(stateSaver = MapCoordinateSaver) {
         mutableStateOf<MapCoordinate?>(null)
     }
+    var deviceLocation by rememberSaveable(stateSaver = MapCoordinateSaver) {
+        mutableStateOf<MapCoordinate?>(null)
+    }
+    var mapDisplayType by rememberSaveable { mutableStateOf(MapDisplayType.NORMAL) }
+    var addressText by rememberSaveable { mutableStateOf<String?>(null) }
+    var addressStatus by rememberSaveable { mutableStateOf(AddressStatus.IDLE) }
+    var locationMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isLocatingDevice by rememberSaveable { mutableStateOf(false) }
+    var showLocationPermissionDialog by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    var locationJob by remember { mutableStateOf<Job?>(null) }
+    var locationRequestId by remember { mutableStateOf(0) }
+
+    fun locateDeviceOnce() {
+        locationJob?.cancel()
+        val requestId = locationRequestId + 1
+        locationRequestId = requestId
+        locationJob = scope.launch {
+            isLocatingDevice = true
+            locationMessage = null
+            try {
+                val coordinate = withTimeout(15_000) {
+                    findInitialDeviceLocation(context.applicationContext)
+                }
+                currentCoroutineContext().ensureActive()
+                if (coordinate == null) {
+                    locationMessage =
+                        "Current device location is unavailable; using the default map center."
+                } else {
+                    deviceLocation = coordinate
+                    locationMessage =
+                        "Map centered near device location. Tap the map to select a GeoTag location."
+                }
+            } catch (exception: TimeoutCancellationException) {
+                currentCoroutineContext().ensureActive()
+                locationMessage =
+                    "Device location timed out; using the default map center."
+            } catch (exception: SecurityException) {
+                currentCoroutineContext().ensureActive()
+                locationMessage =
+                    "Location permission is unavailable; using the default map center."
+            } catch (exception: IllegalArgumentException) {
+                currentCoroutineContext().ensureActive()
+                locationMessage =
+                    "Current device location is unavailable; using the default map center."
+            } finally {
+                if (requestId == locationRequestId) {
+                    isLocatingDevice = false
+                }
+            }
+        }
+    }
+
+    val locationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) {
+            locateDeviceOnce()
+        } else {
+            locationMessage =
+                "Location permission was not granted; using the default map center."
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        val permissionGranted = context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+            PackageManager.PERMISSION_GRANTED
+        if (permissionGranted) {
+            locateDeviceOnce()
+        }
+    }
+
+    LaunchedEffect(selectedCoordinate) {
+        addressText = null
+        val coordinate = selectedCoordinate
+        if (coordinate == null) {
+            addressStatus = AddressStatus.IDLE
+            return@LaunchedEffect
+        }
+
+        addressStatus = AddressStatus.LOADING
+        try {
+            val resolution = withTimeout(10_000) {
+                resolveAddress(context.applicationContext, coordinate)
+            }
+            addressText = resolution.address
+            addressStatus = when {
+                !resolution.geocoderAvailable -> AddressStatus.UNAVAILABLE
+                resolution.address == null -> AddressStatus.NOT_FOUND
+                else -> AddressStatus.RESOLVED
+            }
+        } catch (exception: TimeoutCancellationException) {
+            currentCoroutineContext().ensureActive()
+            addressStatus = AddressStatus.TIMEOUT
+        } catch (exception: IOException) {
+            currentCoroutineContext().ensureActive()
+            addressStatus = AddressStatus.ERROR
+        } catch (exception: SecurityException) {
+            currentCoroutineContext().ensureActive()
+            addressStatus = AddressStatus.ERROR
+        } catch (exception: IllegalArgumentException) {
+            currentCoroutineContext().ensureActive()
+            addressStatus = AddressStatus.ERROR
+        }
+    }
 
     val photoPicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia(),
@@ -116,6 +231,16 @@ private fun GeoTagPhotoGeneratorApp() {
         )
     }
 
+    val mapCardState = MapCardState(
+        selectedCoordinate = selectedCoordinate,
+        deviceLocation = deviceLocation,
+        mapDisplayType = mapDisplayType,
+        addressText = addressText,
+        addressStatus = addressStatus,
+        isLocatingDevice = isLocatingDevice,
+        locationMessage = locationMessage,
+    )
+
     BoxWithConstraints(
         modifier = Modifier.fillMaxSize(),
     ) {
@@ -126,8 +251,18 @@ private fun GeoTagPhotoGeneratorApp() {
                 selectedPhotoMimeType = selectedPhotoMimeType,
                 photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
-                selectedCoordinate = selectedCoordinate,
+                mapCardState = mapCardState,
                 onCoordinateSelected = { selectedCoordinate = it },
+                onMapDisplayTypeChanged = { mapDisplayType = it },
+                onUseDeviceLocation = {
+                    if (context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        locateDeviceOnce()
+                    } else {
+                        showLocationPermissionDialog = true
+                    }
+                },
                 onSelectPhoto = selectPhoto,
             )
         } else {
@@ -136,11 +271,59 @@ private fun GeoTagPhotoGeneratorApp() {
                 selectedPhotoMimeType = selectedPhotoMimeType,
                 photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
-                selectedCoordinate = selectedCoordinate,
+                mapCardState = mapCardState,
                 onCoordinateSelected = { selectedCoordinate = it },
+                onMapDisplayTypeChanged = { mapDisplayType = it },
+                onUseDeviceLocation = {
+                    if (context.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                        PackageManager.PERMISSION_GRANTED
+                    ) {
+                        locateDeviceOnce()
+                    } else {
+                        showLocationPermissionDialog = true
+                    }
+                },
                 onSelectPhoto = selectPhoto,
             )
         }
+    }
+
+    if (showLocationPermissionDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showLocationPermissionDialog = false
+                locationMessage =
+                    "Location permission was not granted; using the default map center."
+            },
+            title = { Text("Center map near your location?") },
+            text = {
+                Text(
+                    "Approximate location is used once to choose the map's initial area. " +
+                        "It will not select a GeoTag point or enable background tracking.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLocationPermissionDialog = false
+                        locationPermissionLauncher.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
+                    },
+                ) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showLocationPermissionDialog = false
+                        locationMessage =
+                            "Location permission was not granted; using the default map center."
+                    },
+                ) {
+                    Text("Not now")
+                }
+            },
+        )
     }
 }
 
@@ -150,8 +333,10 @@ private fun CompactLayout(
     selectedPhotoMimeType: String?,
     photoPreviewRequestId: Int,
     selectionError: String?,
-    selectedCoordinate: MapCoordinate?,
+    mapCardState: MapCardState,
     onCoordinateSelected: (MapCoordinate) -> Unit,
+    onMapDisplayTypeChanged: (MapDisplayType) -> Unit,
+    onUseDeviceLocation: () -> Unit,
     onSelectPhoto: () -> Unit,
 ) {
     val workflowSteps = listOf(
@@ -182,8 +367,10 @@ private fun CompactLayout(
 
             GoogleMapCard(
                 modifier = Modifier.fillMaxWidth(),
-                selectedCoordinate = selectedCoordinate,
+                mapState = mapCardState,
                 onCoordinateSelected = onCoordinateSelected,
+                onMapDisplayTypeChanged = onMapDisplayTypeChanged,
+                onUseDeviceLocation = onUseDeviceLocation,
             )
 
             selectionError?.let { error ->
@@ -223,8 +410,10 @@ private fun WideLayout(
     selectedPhotoMimeType: String?,
     photoPreviewRequestId: Int,
     selectionError: String?,
-    selectedCoordinate: MapCoordinate?,
+    mapCardState: MapCardState,
     onCoordinateSelected: (MapCoordinate) -> Unit,
+    onMapDisplayTypeChanged: (MapDisplayType) -> Unit,
+    onUseDeviceLocation: () -> Unit,
     onSelectPhoto: () -> Unit,
 ) {
     val workflowSteps = listOf(
@@ -288,8 +477,10 @@ private fun WideLayout(
 
             GoogleMapCard(
                 modifier = Modifier.fillMaxWidth(),
-                selectedCoordinate = selectedCoordinate,
+                mapState = mapCardState,
                 onCoordinateSelected = onCoordinateSelected,
+                onMapDisplayTypeChanged = onMapDisplayTypeChanged,
+                onUseDeviceLocation = onUseDeviceLocation,
             )
 
             selectionError?.let { error ->

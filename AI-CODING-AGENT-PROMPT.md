@@ -124,7 +124,8 @@ Use:
 - Jetpack Compose
 - Material 3
 - Material 3 Adaptive where appropriate
-- Google Maps SDK for Android
+- Google Maps SDK for Android as the production map provider
+- osmdroid only as a temporary development fallback when Google Maps configuration is unavailable
 - Android Photo Picker / system picker
 - Bitmap + Canvas
 - local QR generation
@@ -175,6 +176,48 @@ Do not add Places SDK, Routes API, or Static Maps API unless a concrete requirem
 
 Preserve required Google Maps attribution/branding.
 
+### Development-only osmdroid fallback
+
+The production provider remains Google Maps SDK for Android.
+
+If `MAPS_API_KEY` / `GOOGLE_MAPS_API_KEY` is unavailable during
+development, the agent MAY use osmdroid as a temporary development
+fallback so independent map UI/runtime work can continue.
+
+Mandatory rules:
+
+- Do not delete Google Maps code, dependencies, methods, or
+  configuration because the key is missing.
+- Valid Google Maps configuration -> Google Maps.
+- Missing Google Maps configuration -> osmdroid development fallback.
+- Never initialize both providers simultaneously.
+- Use the same provider-independent coordinate model:
+  `latitude: Double`, `longitude: Double`.
+- osmdroid is never the production provider.
+- osmdroid must not be used as a Google Maps billing bypass.
+- Do not scrape Google tiles or use unofficial Google map endpoints.
+- Standard OpenStreetMap tiles may be used by osmdroid for development.
+- A successful osmdroid runtime test does not count as Google Maps
+  runtime validation.
+- Final release validation must verify real Google Maps SDK behavior.
+- Keep device location, map camera position, and selected coordinate
+  separate. A one-time coarse location may center the initial camera
+  only and must never set the selected point/marker.
+- Request `ACCESS_COARSE_LOCATION` contextually. If declined or
+  unavailable, keep the map usable at the deterministic default center.
+  Never add background tracking or location history.
+- Resolve addresses from `selectedCoordinate`, never device location or
+  camera center.
+- Interactive Google Maps may offer NORMAL, SATELLITE, TERRAIN, and
+  HYBRID; mark unsupported development-fallback styles unavailable.
+- The final generated mini-map must explicitly use SATELLITE,
+  independent of interactive appearance. Do not add Static Maps API,
+  scrape tiles, or bypass billing.
+
+If no Google Maps key exists, classify Google Maps runtime validation as
+an external configuration blocker rather than deleting or replacing the
+Google Maps implementation.
+
 ---
 
 # 7. ADDRESS
@@ -188,6 +231,7 @@ If address resolution fails:
 - keep the coordinate usable;
 - show a clear fallback;
 - never fabricate address data.
+- resolve only from the user's selected coordinate.
 
 Do not add paid Google geocoding merely because it is familiar.
 
@@ -349,6 +393,7 @@ Avoid:
 - Places;
 - Routes;
 - Static Maps if native snapshot is sufficient;
+- using osmdroid as a production replacement for Google Maps;
 - cloud image processing;
 - cloud photo storage;
 - custom backend;
@@ -418,7 +463,11 @@ After implementation, inspect for:
 - lifecycle problems;
 - Compose performance/recomposition issues;
 - camera-related references;
-- regressions.
+- regressions;
+- incorrect Google Maps/osmdroid provider selection;
+- simultaneous initialization of both map providers;
+- accidental promotion of osmdroid to production architecture;
+- missing preservation of the Google Maps implementation when the key is absent.
 
 Fix findings before verification whenever practical.
 
@@ -455,9 +504,15 @@ When an emulator/device is available, verify:
 - Photo Picker;
 - existing photo selection;
 - photo preview;
-- Google Maps;
+- Google Maps when valid configuration exists;
+- osmdroid development fallback when Google Maps configuration is unavailable;
+- provider selection correctness;
+- no simultaneous provider initialization;
+- coarse location grant/denial and initial-camera-only behavior;
+- map appearance availability and selected-coordinate preservation;
 - coordinate selection;
-- address;
+- selected-coordinate address resolution, including loading, unavailable,
+  not-found, error, timeout, and cancellation behavior;
 - manual date/time;
 - image generation;
 - Save;
@@ -684,8 +739,13 @@ Then update `IMPLEMENTATION_STATUS.md`.
 After reading the project documentation and inspecting the repository:
 
 1. identify the earliest incomplete task;
-2. state your plan;
-3. implement only the appropriate task scope;
+2. if the active task is blocked only by missing Google Maps configuration,
+   use the approved osmdroid development fallback only where that task's
+   validation can be meaningfully performed without changing production
+   architecture;
+3. never delete or replace the Google Maps production implementation;
+4. state your plan;
+5. implement only the appropriate task scope;
 4. validate it;
 5. self-audit it;
 6. update `IMPLEMENTATION_STATUS.md`;
