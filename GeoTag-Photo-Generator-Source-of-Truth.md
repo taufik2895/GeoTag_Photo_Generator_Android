@@ -120,17 +120,31 @@ Temporary cache/files are acceptable when required by Android APIs.
 
 ### 2.5 Manual Date/Time Is Authoritative
 
-The user-selected date/time is the source of truth.
+The user-selected date and time are separate, authoritative values for the
+future generated GeoTag image.
 
-Never silently replace it with:
+Never silently replace either value with:
 
 - EXIF date/time
+- file creation or modification time
 - current device time
 - server time
+- network time
 - GPS acquisition time
 - map selection time
 
-Default timezone: `Asia/Jakarta` (WIB).
+Use the device date/time only to initialize the pickers before the user
+has made a choice. Confirming a picker makes that user choice
+authoritative; canceling must leave the previous value unchanged.
+Changing the date must not change time, and changing time must not change
+date.
+
+Keep the selected calendar date and wall-clock time separate. The
+project's default timezone is `Asia/Jakarta` (WIB); do not silently
+convert the manually selected time to UTC or another timezone. Display
+and edit time in 24-hour `HH:mm` format. Future image generation must
+consume the saved date and time without deriving or overriding them from
+photo metadata or another clock.
 
 ---
 

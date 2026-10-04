@@ -39,6 +39,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -89,6 +91,12 @@ private fun GeoTagPhotoGeneratorApp() {
     var selectionError by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedCoordinate by rememberSaveable(stateSaver = MapCoordinateSaver) {
         mutableStateOf<MapCoordinate?>(null)
+    }
+    var selectedDateMillis by rememberSaveable {
+        mutableLongStateOf(initialDatePickerMillis())
+    }
+    var selectedTimeMinutes by rememberSaveable {
+        mutableIntStateOf(initialTimeMinutes())
     }
     var deviceLocation by rememberSaveable(stateSaver = MapCoordinateSaver) {
         mutableStateOf<MapCoordinate?>(null)
@@ -252,6 +260,10 @@ private fun GeoTagPhotoGeneratorApp() {
                 photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
                 mapCardState = mapCardState,
+                selectedDateMillis = selectedDateMillis,
+                selectedTimeMinutes = selectedTimeMinutes,
+                onDateSelected = { selectedDateMillis = it },
+                onTimeSelected = { selectedTimeMinutes = it },
                 onCoordinateSelected = { selectedCoordinate = it },
                 onMapDisplayTypeChanged = { mapDisplayType = it },
                 onUseDeviceLocation = {
@@ -272,6 +284,10 @@ private fun GeoTagPhotoGeneratorApp() {
                 photoPreviewRequestId = photoPreviewRequestId,
                 selectionError = selectionError,
                 mapCardState = mapCardState,
+                selectedDateMillis = selectedDateMillis,
+                selectedTimeMinutes = selectedTimeMinutes,
+                onDateSelected = { selectedDateMillis = it },
+                onTimeSelected = { selectedTimeMinutes = it },
                 onCoordinateSelected = { selectedCoordinate = it },
                 onMapDisplayTypeChanged = { mapDisplayType = it },
                 onUseDeviceLocation = {
@@ -334,6 +350,10 @@ private fun CompactLayout(
     photoPreviewRequestId: Int,
     selectionError: String?,
     mapCardState: MapCardState,
+    selectedDateMillis: Long,
+    selectedTimeMinutes: Int,
+    onDateSelected: (Long) -> Unit,
+    onTimeSelected: (Int) -> Unit,
     onCoordinateSelected: (MapCoordinate) -> Unit,
     onMapDisplayTypeChanged: (MapDisplayType) -> Unit,
     onUseDeviceLocation: () -> Unit,
@@ -371,6 +391,13 @@ private fun CompactLayout(
                 onCoordinateSelected = onCoordinateSelected,
                 onMapDisplayTypeChanged = onMapDisplayTypeChanged,
                 onUseDeviceLocation = onUseDeviceLocation,
+            )
+
+            ManualDateTimeCard(
+                selectedDateMillis = selectedDateMillis,
+                selectedTimeMinutes = selectedTimeMinutes,
+                onDateSelected = onDateSelected,
+                onTimeSelected = onTimeSelected,
             )
 
             selectionError?.let { error ->
@@ -411,6 +438,10 @@ private fun WideLayout(
     photoPreviewRequestId: Int,
     selectionError: String?,
     mapCardState: MapCardState,
+    selectedDateMillis: Long,
+    selectedTimeMinutes: Int,
+    onDateSelected: (Long) -> Unit,
+    onTimeSelected: (Int) -> Unit,
     onCoordinateSelected: (MapCoordinate) -> Unit,
     onMapDisplayTypeChanged: (MapDisplayType) -> Unit,
     onUseDeviceLocation: () -> Unit,
@@ -455,7 +486,8 @@ private fun WideLayout(
         Column(
             modifier = Modifier
                 .weight(1f)
-                .fillMaxHeight(),
+                .fillMaxHeight()
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             HeaderCard()
@@ -481,6 +513,13 @@ private fun WideLayout(
                 onCoordinateSelected = onCoordinateSelected,
                 onMapDisplayTypeChanged = onMapDisplayTypeChanged,
                 onUseDeviceLocation = onUseDeviceLocation,
+            )
+
+            ManualDateTimeCard(
+                selectedDateMillis = selectedDateMillis,
+                selectedTimeMinutes = selectedTimeMinutes,
+                onDateSelected = onDateSelected,
+                onTimeSelected = onTimeSelected,
             )
 
             selectionError?.let { error ->

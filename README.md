@@ -19,9 +19,10 @@ Native Android application for generating locally processed GeoTag images from a
 - If coarse location permission is already granted, the app makes one location request to center the initial map only. Otherwise it keeps the deterministic default center; the user can explicitly request approximate device location from the map. Device location never selects the GeoTag coordinate.
 - Interactive map appearance offers Normal, Satellite, Terrain, and Hybrid with Google Maps. The osmdroid development fallback supports Normal only and marks other styles unavailable.
 - A08 resolves an address from the manually selected coordinate using Android `Geocoder`; the coordinate remains valid when address lookup is unavailable or fails.
+- A09 lets the user select a date and a 24-hour time independently using Material 3 pickers. Confirmed selections are saveable and authoritative for future image generation; cancel preserves the previous value. Defaults use the current date/time in Asia/Jakarta (WIB) until selected by the user.
 - No camera permission or camera-related code is present.
 
-Date/time selection, QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. The final generated mini-map is future work and must always explicitly use Satellite independently of the interactive map style. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
+QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. The final generated mini-map is future work and must always explicitly use Satellite independently of the interactive map style. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 

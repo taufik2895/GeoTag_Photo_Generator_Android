@@ -255,6 +255,16 @@ Default timezone:
 Asia/Jakarta
 ```
 
+Manual date and time are independent, saveable values. Use device
+date/time only to initialize pickers. A confirmed user selection is
+authoritative; never override it with EXIF, file creation/modification
+timestamps, GPS, server/network time, or map/address events. Picker
+cancellation must preserve the previous value, and editing one field
+must not change the other. Keep the selected wall-clock value in
+Asia/Jakarta (WIB) without silent UTC conversion and display time in
+24-hour `HH:mm` format. Future image generation must consume these
+selected values unchanged.
+
 ---
 
 # 9. QR

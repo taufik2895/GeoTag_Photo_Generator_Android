@@ -106,8 +106,8 @@ Rules:
 | A05 | Photo preview + safe bitmap handling | VERIFIED | Commit `8666127`; bounded decode/orientation, off-main-thread processing and bitmap cleanup verified; cancellation ownership was fixed. |
 | A06 | Google Maps SDK integration | BLOCKED | Google Maps production implementation, dependency, and manifest configuration remain present. Real Google Maps runtime verification is pending because no valid local API key/project/billing configuration is available. The debug build reports `MAPS_API_KEY_CONFIGURED = false`; no `local.properties` is present. |
 | A07 | Coordinate selection/state | VERIFIED | Provider-independent nullable `MapCoordinate(latitude: Double, longitude: Double)` is saveable across recreation and shared by both providers. `test` and `assembleDebug` pass. On `emulator-5554`, two distinct fallback map taps updated the displayed coordinate and single marker; a drag/pan retained the selected coordinate. No crash/ANR; no camera permission/API. Verified 2026-10-04. |
-| A08 | Address resolution | VERIFIED | Android Geocoder resolves only the manually selected coordinate; one-time coarse location centers the initial camera without auto-selecting a point; provider-specific interactive styles expose only supported fallback Normal style. Fresh debug APK built and installed on `emulator-5554`; permission-denial fallback, granted-location centering, no initial selection, map taps, coordinate updates, and address rendering were checked. `test` and `assembleDebug` PASS; no crash/ANR/camera or A09+ scope. Google Maps runtime/styles remain blocked under A06. Verified 2026-10-04. |
-| A09 | Manual date/time | NOT_STARTED | |
+| A08 | Address resolution | VERIFIED | Android Geocoder resolves only the manually selected coordinate; one-time coarse location centers the initial camera without auto-selecting a point; provider-specific interactive styles expose only supported fallback Normal style. Follow-up lint audit added explicit coarse-permission guards and API-level annotations to the location/Geocoder helpers; all A08 lint errors are cleared. Fresh debug APK built and installed on `emulator-5554`; permission-denial fallback, granted-location centering, map taps, coordinate updates, and address rendering were checked. Google Maps runtime/styles remain blocked under A06. Verified 2026-10-04. |
+| A09 | Manual date/time | VERIFIED | Independent saveable date/time state and Material 3 pickers implemented. Final debug APK passed test/build and emulator checks for date/time confirmation, independence, cancellation, A08 map/address regression, and Photo Picker cancellation. A08 lint findings were corrected. Whole-project lint remains failed on six A05 `PhotoPreview.kt` API-level errors; no A05 code was changed. Verified 2026-10-04. |
 | A10 | Local QR generation | NOT_STARTED | |
 | A11 | Google Maps mini-map snapshot | NOT_STARTED | Must verify compliance/attribution |
 | A12 | Bitmap + Canvas compositor | NOT_STARTED | |
@@ -391,6 +391,84 @@ Date:
 
 ---
 
+### A09 — Manual date/time selection
+
+Status: VERIFIED
+
+Implemented:
+- Adds independently saveable `selectedDateMillis` (UTC-midnight
+  calendar-day value for DatePicker) and `selectedTimeMinutes`
+  (24-hour wall-clock minutes) in the app's Compose state.
+- Initializes picker defaults from the current date and time in
+  `Asia/Jakarta` (WIB); defaults do not replace user-confirmed values.
+- Adds responsive Material 3 date and time picker dialogs. Date/time are
+  committed only by confirmation; Cancel and dialog dismissal discard the
+  draft. Time is displayed and selected in 24-hour `HH:mm`.
+- Changes to date and time update only their own field; date/address/map
+  remain independent.
+- Keeps the wide layout scrollable after adding the picker card.
+
+Files changed:
+- `app/src/main/java/com/geotagphotogenerator/ManualDateTimeCard.kt`
+- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/src/main/java/com/geotagphotogenerator/DeviceLocationProvider.kt`
+- `app/src/main/java/com/geotagphotogenerator/AddressResolver.kt`
+- `GeoTag-Photo-Generator-Source-of-Truth.md`
+- `AGENTS.md`
+- `AI-CODING-AGENT-PROMPT.md`
+- `README.md`
+- `IMPLEMENTATION_STATUS.md`
+
+Validation:
+- Standard-output Gradle validation is blocked by the existing VS Code
+  Kotlin language-server lock on `app/build/.../R.jar`; the unrelated
+  process was not stopped.
+- `.\gradlew.bat --no-daemon -I .\validation-build-dir.gradle test --console=plain` — PASS after the final A08 permission guard; test source sets are `NO-SOURCE`.
+- `.\gradlew.bat --no-daemon -I .\validation-build-dir.gradle assembleDebug --console=plain` — PASS after the final A08 permission guard.
+- `.\gradlew.bat --no-daemon -I .\validation-build-dir.gradle lint --console=plain` — FAIL: 6 `NewApi` errors remain in the existing A05 `PhotoPreview.kt` ImageDecoder helper, plus 9 warnings and 2 hints. The A08 permission/API findings are cleared; no unrelated A05 fix was made.
+- The newly built APK was installed and cold-launched on `emulator-5554`; process and top-resumed MainActivity were confirmed.
+- A fallback map tap changed the selected coordinate to
+  `37.72402166460627, -122.15560913085938`; Geocoder displayed
+  `159 W Joaquin Ave, San Leandro, CA 94577, USA`.
+- Confirming October 15, 2026 changed only the date; time remained
+  `20:29`. Date cancellation preserved the confirmed date.
+- Confirming time `21:45` changed only the time; date remained
+  `15 October 2026`. Time cancellation preserved `20:29` before the
+  confirmation check.
+- The existing-photo Photo Picker opened and canceled; coordinate,
+  address, date, and time remained unchanged.
+- The app process remained alive. Logcat scan found no fatal exception,
+  ANR, `SecurityException`, or permission-denial event.
+- Camera audit: no camera permission, API, dependency, intent, or UI.
+- A10+ scope audit: no QR generation, mini-map snapshot, compositor,
+  MediaStore save, Sharesheet, or Firebase implementation.
+- `git diff --check` — PASS; only Git line-ending normalization notices.
+
+Self-audit:
+- Saveable date and time state are separate: PASS.
+- Picker draft commits only on confirmation: PASS.
+- Date changes do not modify time; time changes do not modify date: PASS.
+- Device time is used only for initial WIB defaults: PASS.
+- Date/time do not feed back into coordinate, device-location, or
+  address state: PASS.
+- A08 permission checks are explicit and newer location/Geocoder APIs
+  are version-annotated: PASS.
+- No new dependency, permission, camera feature, or paid service: PASS.
+- Temporary Gradle init script and generated validation output cleaned:
+  PASS.
+
+Known limitations:
+- Google Maps production runtime remains BLOCKED under A06; style
+  interaction on this emulator is limited to the osmdroid development
+  fallback's Normal style.
+- No final image generation exists yet; selected date/time are available
+  as app state for future milestones.
+
+Date:
+- 2026-10-04
+
+---
+
 ## Regression Checklist
 
 Before final release, verify:
@@ -490,52 +568,52 @@ Do not erase useful historical evidence merely to make the file shorter.
 
 ## Current Session Checkpoint
 
-Current Task: A08 — Selected-coordinate address resolution and approved
-map behavior
+Current Task: A09 — Manual date/time selection
 
 Status: VERIFIED
 
 Completed:
-- Implemented selected-coordinate reverse geocoding and explicit
-  address-result states.
-- Added optional coarse one-time initial-camera location and denial
-  fallback without conflating device and selected coordinates.
-- Added provider-supported interactive map appearance choices.
-- Updated README, the five authoritative project documents, and this
-  status ledger with the approved location/map behavior.
+- Added independent, saveable manual date and 24-hour WIB time state
+  with Material 3 picker confirmation/cancellation.
+- Fixed A08 lint findings with coarse-location permission guards and
+  API-level annotations for newer Geocoder/location methods.
+- Rebuilt, installed, and checked the latest APK on `emulator-5554`;
+  map/address, picker state, cancellation, and app liveness passed.
 
 Files Changed:
-- `app/src/main/java/com/geotagphotogenerator/GoogleMapCard.kt`
+- `app/src/main/java/com/geotagphotogenerator/ManualDateTimeCard.kt`
 - `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/src/main/java/com/geotagphotogenerator/DeviceLocationProvider.kt`
+- `app/src/main/java/com/geotagphotogenerator/AddressResolver.kt`
+- `GeoTag-Photo-Generator-Source-of-Truth.md`
+- `AGENTS.md`
+- `AI-CODING-AGENT-PROMPT.md`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `.\gradlew.bat --no-daemon -I .\validation-build-dir.gradle test --console=plain` — PASS (`NO-SOURCE`).
-- `.\gradlew.bat --no-daemon -I .\validation-build-dir.gradle assembleDebug --console=plain` — PASS.
-- Installed and cold-launched the newly built APK on `emulator-5554`.
-- Verified device location centers the map without an automatic
-  selection; manual taps update coordinates and address resolution.
-- Verified denied permission retains the default-center map and app
-  remains alive without crash/ANR.
-- Camera and A09+ source/dependency audits passed.
-- Lint was not run and is not claimed as passing.
+- Isolated `test` and `assembleDebug` — PASS after final source changes;
+  unit-test source sets are `NO-SOURCE`.
+- Lint — FAIL due to six unrelated A05 `PhotoPreview.kt` API-level
+  errors; A08 lint findings are fixed.
+- Runtime checks passed on `emulator-5554`; no crash or ANR.
 
 Self-Audit:
-- Address lookup uses only the selected coordinate: PASS.
-- Device location and selected-coordinate state remain distinct: PASS.
-- Provider selection deterministic and exclusive: PASS.
-- Legacy Geocoder call runs off the main thread: PASS.
-- No new camera capability, secret, or A09+ feature: PASS.
+- Independent date/time state and confirm/cancel semantics: PASS.
+- A08 permission/API guards and asynchronous address lookup: PASS.
+- Camera permission/API/dependency/intent/UI absent: PASS.
+- A10+ implementation absent: PASS.
+- No new dependency, secret, permission, service, or paid API: PASS.
 
 Blockers:
+- Whole-project lint remains failed on existing A05 ImageDecoder API
+  findings; these are out of scope for this task.
 - A06 remains BLOCKED until real Google Maps runtime validation with a
-  valid restricted key/configuration. Google production map types and
-  generated Satellite mini-map are not runtime-verified.
+  valid restricted key/configuration.
 
 Next Action:
-- A09 — Manual date/time. Do not change A06 status based on osmdroid
-  validation.
+- A10 — Local QR generation. Do not change A06 status based on
+  osmdroid validation.
 
 Last Updated:
 - 2026-10-04

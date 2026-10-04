@@ -87,6 +87,15 @@ Rules:
   or bypass billing.
 - Reverse geocoding must use `selectedCoordinate`, never device location
   or camera center.
+- Keep manually selected date and time as separate saveable values.
+  Device date/time may initialize the pickers only; confirmed user values
+  are authoritative and must not be replaced by EXIF, file timestamps,
+  GPS, server/network time, or map/address events.
+- Canceling a date/time picker must preserve its previous value.
+  Changing date must not change time and vice versa.
+- Use Asia/Jakarta (WIB) as the project timezone without silently
+  converting manually selected wall time; display time as 24-hour `HH:mm`.
+- Future image generation must use the selected date and time unchanged.
 - Never use osmdroid to bypass Google Maps billing or requirements.
 - Never scrape Google map tiles or use unofficial Google map endpoints.
 - A passing osmdroid test is not evidence that Google Maps runtime works.

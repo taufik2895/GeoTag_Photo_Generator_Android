@@ -4,6 +4,7 @@ import android.content.Context
 import android.location.Address
 import android.location.Geocoder
 import android.os.Build
+import androidx.annotation.RequiresApi
 import java.io.IOException
 import java.util.Locale
 import kotlin.coroutines.resume
@@ -41,6 +42,7 @@ internal suspend fun resolveAddress(
     AddressResolution(address = address, geocoderAvailable = true)
 }
 
+@RequiresApi(Build.VERSION_CODES.TIRAMISU)
 private suspend fun Geocoder.awaitAddresses(
     coordinate: MapCoordinate,
 ): List<Address> = suspendCancellableCoroutine { continuation ->
