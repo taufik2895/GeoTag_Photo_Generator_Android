@@ -251,7 +251,18 @@ remains unverified until validated with real Google Maps configuration.
 
 Prefer an officially supported Android Google Maps rendering/snapshot approach such as `GoogleMap.snapshot()` when suitable and compliant.
 
-Do not use Static Maps API merely because it is familiar if the native SDK snapshot can satisfy the requirement.
+The final mini-map must be generated from `selectedCoordinate` only,
+centered at that exact coordinate, and include a visible marker at the
+same point. Use a deterministic snapshot zoom of `16.0`; do not derive
+zoom from the coordinate, device location, or interactive camera. The
+snapshot map must explicitly use `MAP_TYPE_SATELLITE` every time,
+regardless of the interactive map appearance or camera. Keep the
+snapshot camera and provider-specific state separate from the interactive
+map. A missing Google Maps configuration must produce an explicit
+unavailable/blocked state; the osmdroid development fallback must not be
+presented as a satellite snapshot.
+
+Do not use Static Maps API merely because it is familiar if the native SDK snapshot can satisfy the requirement. Preserve the complete snapshot and any Google Maps attribution/branding; do not crop or cover it.
 
 Always preserve required Google Maps attribution/branding.
 

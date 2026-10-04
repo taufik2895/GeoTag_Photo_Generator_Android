@@ -22,9 +22,11 @@ Native Android application for generating locally processed GeoTag images from a
 - A09 lets the user select a date and a 24-hour time independently using Material 3 pickers. Confirmed selections are saveable and authoritative for future image generation; cancel preserves the previous value. Defaults use the current date/time in Asia/Jakarta (WIB) until selected by the user.
 - A10 generates a local QR from the currently selected coordinate using `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18`. The `q` value contains only latitude and longitude; `t=h` and `z=18` are separate parameters. The QR is regenerated when the selected coordinate changes and is absent before a location is selected.
 - ZXing Core encodes QR codes on-device; encoding does not require internet, backend, database, Place ID, or Places API. Internet is needed only when opening the scanned Google Maps URL.
+- A11 adds a separate Google Maps SDK mini-map snapshot path. It explicitly uses satellite imagery, is centered on `selectedCoordinate` at deterministic zoom `16.0`, and marks that exact coordinate. Its camera/style are independent of the interactive map. The whole Maps snapshot is retained for attribution/branding; Static Maps API is not used.
+- A11's production snapshot is blocked until valid Google Maps configuration is supplied. With no key, the app states that the development osmdroid map cannot provide this product snapshot; osmdroid is not used as a satellite substitute. Satellite rendering and snapshot capture still require production Google Maps runtime validation.
 - No camera permission or camera-related code is present.
 
-Final image composition, save/share flow, and Firebase Remote Config are not yet implemented. The final generated mini-map is future work and must always explicitly use Satellite independently of the interactive map style. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
+Final image composition, save/share flow, and Firebase Remote Config are not yet implemented. A11's snapshot is not yet verified against a live Google Maps configuration. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 

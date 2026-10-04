@@ -109,7 +109,7 @@ Rules:
 | A08 | Address resolution | VERIFIED | Android Geocoder resolves only the manually selected coordinate; one-time coarse location centers the initial camera without auto-selecting a point; provider-specific interactive styles expose only supported fallback Normal style. Follow-up lint audit added explicit coarse-permission guards and API-level annotations to the location/Geocoder helpers; all A08 lint errors are cleared. Fresh debug APK built and installed on `emulator-5554`; permission-denial fallback, granted-location centering, map taps, coordinate updates, and address rendering were checked. Google Maps runtime/styles remain blocked under A06. Verified 2026-10-04. |
 | A09 | Manual date/time | VERIFIED | Independent saveable date/time state and Material 3 pickers implemented. Final debug APK passed test/build and emulator checks for date/time confirmation, independence, cancellation, A08 map/address regression, and Photo Picker cancellation. A08 lint findings were corrected. Whole-project lint remains failed on six A05 `PhotoPreview.kt` API-level errors; no A05 code was changed. Verified 2026-10-04. |
 | A10 | Local QR generation | VERIFIED | Local ZXing Core 3.5.3 encoder builds the exact `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18` payload only from `selectedCoordinate`. Three unit tests decoded exact reference/example/full-precision payloads; the QR on the final emulator APK screenshot was independently decoded to its exact selected-coordinate URL. Map reselection regenerated a changed URL/QR; date/time changes left it unchanged. `test` and `assembleDebug` PASS; lint remains blocked only by six existing A05 `PhotoPreview.kt` API errors. No A11+ implementation. Verified 2026-10-04. |
-| A11 | Google Maps mini-map snapshot | NOT_STARTED | Must verify compliance/attribution |
+| A11 | Google Maps mini-map snapshot | BLOCKED | Google Maps SDK snapshot path is implemented as satellite-only and selected-coordinate-driven, but production rendering/snapshot/attribution cannot be runtime-verified while `MAPS_API_KEY_CONFIGURED = false`. The emulator correctly reports the missing configuration instead of presenting osmdroid as satellite. |
 | A12 | Bitmap + Canvas compositor | NOT_STARTED | |
 | A13 | Final image preview | NOT_STARTED | |
 | A14 | MediaStore Save | NOT_STARTED | |
@@ -595,6 +595,123 @@ Date:
 
 ---
 
+### A11 — Google Maps mini-map snapshot
+
+Status: BLOCKED
+
+A10 audit before A11:
+- The committed A10 QR builder uses only the supplied `MapCoordinate`
+  and produces
+  `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18`; the `q`
+  parameter remains only the full-precision coordinate pair.
+- The three ZXing unit tests independently encode/decode the reference,
+  user-example, and full-precision URLs.
+- The A10 UI receives `selectedCoordinate` as an immutable input and
+  does not update coordinate, address, date, or time state.
+- No Places, Routes, Static Maps, cloud QR, or camera capability is
+  present.
+
+Implemented:
+- Added a mini-map card to compact and wide layouts. The configured
+  production path uses a separate Google Maps Compose surface and the
+  official `GoogleMap.snapshot()` SDK callback.
+- The snapshot is keyed to the current selected coordinate, moves an
+  independent camera to that exact latitude/longitude at deterministic
+  zoom `16.0`, and includes a marker at that point.
+- Both the Compose map properties and the SDK map instance explicitly
+  set Satellite. Snapshot state records its source coordinate; a new
+  selection cancels the prior effect, hides the old snapshot, and
+  recycles its bitmap when replaced or disposed.
+- Map-load readiness and snapshot callbacks have bounded timeouts and
+  explicit failure states rather than indefinite loading.
+- The preview displays the full snapshot without cropping; native map
+  attribution/branding is not deliberately removed or covered.
+- Without configured Google Maps, the app shows an explicit production
+  snapshot blocker. It does not substitute osmdroid or claim that
+  fallback tiles are satellite imagery.
+- The mini-map is independent of interactive camera/style and does not
+  use device location, address, QR payload, or hard-coded coordinates.
+- No Static Maps API or new dependency/service was added.
+
+Files changed:
+- `app/src/main/java/com/geotagphotogenerator/GoogleMapsMiniMap.kt`
+- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `GeoTag-Photo-Generator-Source-of-Truth.md`
+- `AGENTS.md`
+- `AI-CODING-AGENT-PROMPT.md`
+- `README.md`
+- `IMPLEMENTATION_STATUS.md`
+
+Validation:
+- `.\gradlew.bat --no-daemon test --console=plain` — PASS; A10 QR
+  suite ran 3 tests, 0 failures/errors/skips.
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS.
+- Installed fresh debug APK on `emulator-5554`, cold-launched
+  `MainActivity`, and confirmed the process remained alive and resumed.
+- The final post-install cold launch took about 23 seconds to first render
+  and logged 899 skipped frames. No ANR was recorded for
+  `com.geotagphotogenerator`; this startup jank is observed, unexplained,
+  and remains for performance follow-up.
+- Runtime selected a coordinate on the osmdroid development fallback.
+  The UI explicitly displayed that Google Maps satellite snapshot is
+  blocked until `MAPS_API_KEY` is configured; no false satellite preview
+  was shown.
+- A10 regression on the same app session: selected coordinate changes
+  updated the visible full-precision QR URL; address followed the selected
+  coordinate; selected date `04 October 2026` and time `22:50` remained
+  unchanged across selection changes. Panning the interactive map left
+  selected coordinate and QR unchanged.
+- Android Photo Picker opened; cancel returned to the app and preserved
+  coordinate/QR/date/time state.
+- Last-2000-line logcat check found no fatal exception, ANR, OOM, or fatal
+  signal for `com.geotagphotogenerator`. Logcat did contain an ANR in the
+  separate `com.google.android.apps.maps` process; it is not evidence of
+  the A11 path, which was not initialized without the key. `MainActivity`
+  remained alive and top-resumed.
+- Lint — FAIL: six known `NewApi` errors in A05 `PhotoPreview.kt`, plus
+  nine warnings and two hints. No A11 lint finding was reported.
+- Camera audit: no camera permission/API/dependency/intent/UI found.
+- A12+ scope audit: no compositor, final-image preview, MediaStore save,
+  Sharesheet, or Firebase implementation was added.
+- `git diff --check` — PASS.
+
+Self-audit:
+- Snapshot path is only instantiated when the Google Maps config gate is
+  true; when false, the existing app uses only its osmdroid interactive
+  fallback and the A11 production snapshot reports blocked: PASS by code
+  and emulator UI.
+- Snapshot style is explicitly SATELLITE, independent of interactive
+  `mapDisplayType`: PASS by code inspection.
+- Snapshot coordinate/camera/marker derive only from selectedCoordinate:
+  PASS by code inspection.
+- Rapid selection cancellation and bitmap cleanup are handled; no
+  activity/map reference is retained beyond the composable: PASS by code
+  inspection.
+- Google Maps snapshot generation, satellite imagery, marker rendering,
+  and branding could not be exercised because the Maps API key is not
+  configured: BLOCKED.
+- The emulator's final cold startup was slow and skipped frames; the
+  cause was not established in this A11 pass.
+
+Known limitations / blockers:
+- `MAPS_API_KEY_CONFIGURED = false`; `local.properties` contains no
+  configured Maps key. Real Google Maps rendering and `GoogleMap.snapshot`
+  behavior—including satellite tiles, marker, and included attribution—
+  have NOT been runtime-verified. osmdroid fallback does not satisfy this
+  verification.
+- A06 remains BLOCKED. A11 remains BLOCKED until valid restricted Google
+  Maps configuration is supplied and the production snapshot path is
+  verified on-device.
+- Interactive style independence could not be exercised with Google Maps;
+  the active osmdroid fallback only supports Normal. The snapshot path
+  does not read interactive style state.
+- Whole-project lint remains failed on existing A05 API-level findings.
+
+Date:
+- 2026-10-04
+
+---
+
 ## Regression Checklist
 
 Before final release, verify:
@@ -694,65 +811,70 @@ Do not erase useful historical evidence merely to make the file shorter.
 
 ## Current Session Checkpoint
 
-Current Task: A10 — Local QR generation
+Current Task: A11 — Google Maps mini-map snapshot
 
-Status: VERIFIED
+Status: BLOCKED
 
 Completed:
-- Audited A09 only; verified date/time independence, manual authority,
-  map/location/address separation, foreground-only coarse location, and
-  no-camera invariants.
-- Added local ZXing-based QR generation from selectedCoordinate with the
-  reference Maps URL format, a no-selection state, and coordinate-change
-  regeneration.
-- Built/tested the QR encoder, decoded the generated bitmap from emulator
-  screenshots, opened the example URL in Google Maps, and regression-tested
-  A09 map/date/time/Photo Picker behavior.
+- Audited A10 only; verified the exact local QR URL, full-precision
+  selectedCoordinate source, passing local encode/decode tests, and
+  absence of side effects on address/date/time.
+- Implemented a separate Google Maps SDK snapshot path that explicitly
+  enforces Satellite, selectedCoordinate camera/marker, deterministic
+  zoom 16.0, and coordinate-keyed bitmap cleanup. Added an explicit
+  missing-key blocked state instead of representing osmdroid as satellite.
+- Fresh debug APK passed build/test, installed and ran on
+  `emulator-5554`. A10 selection/QR/address/date/time/pan and Photo Picker
+  open/cancel regressions passed.
+- Google Maps production snapshot remains unverified because no Maps API
+  key is configured; A11 is therefore BLOCKED, not VERIFIED.
 
 Files Changed:
-- `app/src/main/java/com/geotagphotogenerator/LocationQrCode.kt`
-- `app/src/test/java/com/geotagphotogenerator/LocationQrCodeTest.kt`
+- `app/src/main/java/com/geotagphotogenerator/GoogleMapsMiniMap.kt`
 - `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
-- `app/build.gradle.kts`
-- `gradle/libs.versions.toml`
 - `GeoTag-Photo-Generator-Source-of-Truth.md`
 - `AGENTS.md`
 - `AI-CODING-AGENT-PROMPT.md`
-- `DEVELOPER-COSTS-AND-BILLING.md`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `.\gradlew.bat --no-daemon test --rerun-tasks --console=plain` —
-  PASS (3 QR tests, exact URLs decoded).
+- `.\gradlew.bat --no-daemon test --console=plain` — PASS (3 A10 QR
+  tests, 0 failures/errors/skips).
 - `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS.
-- Final APK installed/launched on `emulator-5554`; no crash/ANR.
-- Actual QR screenshot decoded locally to the exact displayed selected
-  coordinate URL.
-- Exact reference and full-precision sample URLs decoded in unit tests.
-- Google Maps accepted the user-example URL and opened the destination;
-  visible coordinate text rounded to seven decimals.
-- A09 map/address, date/time confirmation/cancellation/independence, and
-  Photo Picker open/cancel regression checks passed.
-- Lint FAIL remains limited to six existing A05 ImageDecoder API errors.
+- APK installed/launched on `emulator-5554`; process remained alive.
+- Final cold launch rendered after about 23 seconds and reported 899
+  skipped frames; no ANR for this app, but startup jank needs follow-up.
+- A11 UI showed snapshot blocked until `MAPS_API_KEY` configuration.
+- A10 coordinate/QR/address/date/time/pan and Photo Picker cancellation
+  regression checks passed.
+- Lint FAIL: six existing A05 `PhotoPreview.kt` API errors, nine warnings,
+  two hints; no A11 lint finding.
+- Logcat also contained an ANR in the separate `com.google.android.apps.maps`
+  process; the A11 Google Maps path was not initialized without a key.
+- `git diff --check` — PASS.
 
 Self-Audit:
-- QR reads only selectedCoordinate and retains full Double precision: PASS.
-- No initial/fake QR; stale bitmap is cleared/recycled: PASS.
-- QR generation is local and off-main-thread: PASS.
-- A09 state and provider-independent map/address behavior remain intact:
-  PASS.
-- No camera capability or A11+ implementation: PASS.
+- Snapshot uses selectedCoordinate only, has independent satellite camera,
+  fixed zoom, exact marker, and does not follow interactive style/camera:
+  PASS by code inspection.
+- Snapshot capture preserves the full bitmap/branding and disposes
+  replaced bitmaps; no fake fallback: PASS by code inspection.
+- Camera and A12+ scope audits: PASS.
 
 Blockers:
-- A06 remains BLOCKED until real Google Maps runtime validation with a
-  valid restricted key/configuration.
+- Google Maps production key/configuration is missing; real satellite
+  snapshot path is not runtime-verified. A06 and A11 remain BLOCKED until
+  valid restricted configuration and the relevant real Google Maps
+  runtime checks are supplied.
 - Whole-project lint remains failed on existing A05 ImageDecoder API
-  findings; no A10 lint finding remains.
+  findings.
 
 Next Action:
-- A11 — Google Maps mini-map snapshot. Keep A06 BLOCKED until real
-  Google Maps runtime configuration is available.
+- Configure a valid restricted Maps SDK key, then validate the real Google
+  Maps satellite snapshot, marker, attribution, coordinate changes, and
+  interactive-style independence. Keep A06 BLOCKED until separately
+  validated; do not start A12.
 
 Last Updated:
 - 2026-10-04

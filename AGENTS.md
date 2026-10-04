@@ -85,6 +85,12 @@ Rules:
 - The final generated mini-map must explicitly use SATELLITE regardless
   of interactive appearance. Do not use Static Maps API, scrape tiles,
   or bypass billing.
+- Generate the final mini-map only from `selectedCoordinate`, with a
+  marker at that exact point and a separate deterministic snapshot camera
+  at zoom `16.0`. Do not follow the interactive camera or style. If
+  Google Maps configuration is missing, report the snapshot unavailable;
+  never present osmdroid tiles as a satellite snapshot. Preserve the
+  complete Google Maps snapshot including required attribution/branding.
 - Reverse geocoding must use `selectedCoordinate`, never device location
   or camera center.
 - Keep manually selected date and time as separate saveable values.

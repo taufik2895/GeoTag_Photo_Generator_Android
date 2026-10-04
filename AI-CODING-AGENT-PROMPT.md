@@ -213,6 +213,11 @@ Mandatory rules:
 - The final generated mini-map must explicitly use SATELLITE,
   independent of interactive appearance. Do not add Static Maps API,
   scrape tiles, or bypass billing.
+- Generate it only from `selectedCoordinate`, with the marker at the
+  selected point and a separate deterministic camera at zoom `16.0`.
+  Never follow interactive camera/style state or substitute osmdroid
+  when Google Maps configuration is unavailable. Preserve the complete
+  Maps snapshot and required attribution/branding.
 
 If no Google Maps key exists, classify Google Maps runtime validation as
 an external configuration blocker rather than deleting or replacing the

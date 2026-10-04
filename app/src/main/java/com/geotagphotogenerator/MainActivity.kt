@@ -393,6 +393,10 @@ private fun CompactLayout(
                 onUseDeviceLocation = onUseDeviceLocation,
             )
 
+            GoogleMapsMiniMapCard(
+                selectedCoordinate = mapCardState.selectedCoordinate,
+            )
+
             ManualDateTimeCard(
                 selectedDateMillis = selectedDateMillis,
                 selectedTimeMinutes = selectedTimeMinutes,
@@ -517,6 +521,10 @@ private fun WideLayout(
                 onCoordinateSelected = onCoordinateSelected,
                 onMapDisplayTypeChanged = onMapDisplayTypeChanged,
                 onUseDeviceLocation = onUseDeviceLocation,
+            )
+
+            GoogleMapsMiniMapCard(
+                selectedCoordinate = mapCardState.selectedCoordinate,
             )
 
             ManualDateTimeCard(
