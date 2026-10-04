@@ -274,12 +274,21 @@ Generate the QR locally.
 Required payload:
 
 ```text
-https://www.google.com/maps?q={latitude},{longitude}
+https://maps.google.com/?q={latitude},{longitude}&t=h&z=18
 ```
 
 Rules:
 
-- preserve useful coordinate precision;
+- Build the payload only from the current user-selected
+  `selectedCoordinate`; do not use device location, camera center, address,
+  photo metadata, or a parsed Maps page URL.
+- The `q` parameter contains only `latitude,longitude`; keep `t=h` and
+  `z=18` separate from the coordinate pair.
+- Preserve the selected `Double` values without unnecessary rounding.
+- If no coordinate is selected, show no QR. When the selection changes,
+  regenerate the payload and QR and do not present stale output.
+- Generate and render it locally; encoding must not require internet,
+  backend, database, Place ID, or Places API.
 - do not shorten the URL;
 - do not redirect through this application;
 - do not require a database;

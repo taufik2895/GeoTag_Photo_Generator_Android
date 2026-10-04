@@ -20,9 +20,11 @@ Native Android application for generating locally processed GeoTag images from a
 - Interactive map appearance offers Normal, Satellite, Terrain, and Hybrid with Google Maps. The osmdroid development fallback supports Normal only and marks other styles unavailable.
 - A08 resolves an address from the manually selected coordinate using Android `Geocoder`; the coordinate remains valid when address lookup is unavailable or fails.
 - A09 lets the user select a date and a 24-hour time independently using Material 3 pickers. Confirmed selections are saveable and authoritative for future image generation; cancel preserves the previous value. Defaults use the current date/time in Asia/Jakarta (WIB) until selected by the user.
+- A10 generates a local QR from the currently selected coordinate using `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18`. The `q` value contains only latitude and longitude; `t=h` and `z=18` are separate parameters. The QR is regenerated when the selected coordinate changes and is absent before a location is selected.
+- ZXing Core encodes QR codes on-device; encoding does not require internet, backend, database, Place ID, or Places API. Internet is needed only when opening the scanned Google Maps URL.
 - No camera permission or camera-related code is present.
 
-QR generation, final image composition, save/share flow, and Firebase Remote Config are not yet implemented. The final generated mini-map is future work and must always explicitly use Satellite independently of the interactive map style. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
+Final image composition, save/share flow, and Firebase Remote Config are not yet implemented. The final generated mini-map is future work and must always explicitly use Satellite independently of the interactive map style. Task verification status is recorded in `IMPLEMENTATION_STATUS.md`.
 
 ## Local prerequisites
 

@@ -108,7 +108,7 @@ Rules:
 | A07 | Coordinate selection/state | VERIFIED | Provider-independent nullable `MapCoordinate(latitude: Double, longitude: Double)` is saveable across recreation and shared by both providers. `test` and `assembleDebug` pass. On `emulator-5554`, two distinct fallback map taps updated the displayed coordinate and single marker; a drag/pan retained the selected coordinate. No crash/ANR; no camera permission/API. Verified 2026-10-04. |
 | A08 | Address resolution | VERIFIED | Android Geocoder resolves only the manually selected coordinate; one-time coarse location centers the initial camera without auto-selecting a point; provider-specific interactive styles expose only supported fallback Normal style. Follow-up lint audit added explicit coarse-permission guards and API-level annotations to the location/Geocoder helpers; all A08 lint errors are cleared. Fresh debug APK built and installed on `emulator-5554`; permission-denial fallback, granted-location centering, map taps, coordinate updates, and address rendering were checked. Google Maps runtime/styles remain blocked under A06. Verified 2026-10-04. |
 | A09 | Manual date/time | VERIFIED | Independent saveable date/time state and Material 3 pickers implemented. Final debug APK passed test/build and emulator checks for date/time confirmation, independence, cancellation, A08 map/address regression, and Photo Picker cancellation. A08 lint findings were corrected. Whole-project lint remains failed on six A05 `PhotoPreview.kt` API-level errors; no A05 code was changed. Verified 2026-10-04. |
-| A10 | Local QR generation | NOT_STARTED | |
+| A10 | Local QR generation | VERIFIED | Local ZXing Core 3.5.3 encoder builds the exact `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18` payload only from `selectedCoordinate`. Three unit tests decoded exact reference/example/full-precision payloads; the QR on the final emulator APK screenshot was independently decoded to its exact selected-coordinate URL. Map reselection regenerated a changed URL/QR; date/time changes left it unchanged. `test` and `assembleDebug` PASS; lint remains blocked only by six existing A05 `PhotoPreview.kt` API errors. No A11+ implementation. Verified 2026-10-04. |
 | A11 | Google Maps mini-map snapshot | NOT_STARTED | Must verify compliance/attribution |
 | A12 | Bitmap + Canvas compositor | NOT_STARTED | |
 | A13 | Final image preview | NOT_STARTED | |
@@ -469,6 +469,132 @@ Date:
 
 ---
 
+### A10 — Local QR generation
+
+Status: VERIFIED
+
+A09 audit before A10:
+- `selectedCoordinate` is only updated by user map-tap callbacks. The
+  one-time optional coarse device fix updates `deviceLocation` and camera
+  viewport only; it does not select a coordinate or move the marker.
+- Google Maps and osmdroid each receive the same provider-independent
+  coordinate. Provider selection is build-config gated, so only one map
+  provider is composed. The production Google Maps dependency/configuration
+  remains present; A06 remains BLOCKED without a valid key.
+- Address resolution is keyed to `selectedCoordinate`; resolver output
+  updates address state and does not write to the coordinate.
+- Location is coarse, foreground-only and one-shot with a timeout; no
+  background tracking or location history is present. Permission
+  unavailability leaves the map usable at its default center.
+- Date and time are separate saveable values. Picker draft state is local
+  to each picker and writes only after confirmation; cancellation/dismissal
+  does not call the parent setter. The current clock initializes defaults
+  only and confirmed values are not overwritten by coordinate/address
+  changes or QR generation.
+- The manifest and dependencies contain no camera permission or camera
+  capability.
+
+Implemented:
+- Added ZXing Core 3.5.3 as the local QR encoder; no network service,
+  backend, database, Places API, Place ID, or Google Maps API call is used
+  to encode the QR.
+- Builds `https://maps.google.com/?q=${latitude},${longitude}&t=h&z=18`
+  only from the current selected `MapCoordinate`. The `q` value has only
+  the two coordinates; `t=h` and `z=18` are separate parameters.
+- Preserves the selected `Double` string precision without rounding.
+  There is no QR when the coordinate is null. Payload-keyed UI state
+  immediately removes the old QR on selection change.
+- Generates a high-contrast 512x512 bitmap off the main thread and
+  releases replaced/disposed bitmaps. The UI shows the QR and exact URL.
+- Added exact payload + ZXing decode unit cases for the supplied reference
+  coordinate, user example coordinate, and additional full-precision
+  coordinate.
+
+Files changed:
+- `app/src/main/java/com/geotagphotogenerator/LocationQrCode.kt`
+- `app/src/test/java/com/geotagphotogenerator/LocationQrCodeTest.kt`
+- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
+- `app/build.gradle.kts`
+- `gradle/libs.versions.toml`
+- `GeoTag-Photo-Generator-Source-of-Truth.md`
+- `AGENTS.md`
+- `AI-CODING-AGENT-PROMPT.md`
+- `DEVELOPER-COSTS-AND-BILLING.md` (QR policy text only; cost audit remains a template)
+- `README.md`
+- `IMPLEMENTATION_STATUS.md`
+
+Validation:
+- `.\gradlew.bat --no-daemon test --rerun-tasks --console=plain` — PASS;
+  three QR unit tests ran, with no failures or skips.
+- `.\gradlew.bat --no-daemon test --console=plain` after the final QR
+  bitmap API adjustment — PASS.
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` after all
+  production source changes — PASS.
+- Installed the fresh debug APK on `emulator-5554`, cold-launched
+  `MainActivity`, and confirmed the process remained alive.
+- With no selected coordinate, the QR card displayed its empty-state
+  prompt and no QR. A manual map tap selected
+  `37.74574303801686, -122.1295166015625`; the address resolved and the
+  UI showed the exact corresponding URL and QR.
+- A second map tap changed the coordinate to
+  `37.72402166460627, -122.1295166015625`; the displayed URL changed
+  immediately and the refreshed QR screenshot decoded to that exact URL.
+- A final screenshot from the final APK was decoded locally using the
+  ZXing Core 3.5.3 JVM decoder. Decoded result:
+  `https://maps.google.com/?q=37.74574303801686,-122.1295166015625&t=h&z=18`.
+- The exact reference and user-example URLs were each generated and
+  decoded in unit tests:
+  `https://maps.google.com/?q=-7.19005,107.90158&t=h&z=18` and
+  `https://maps.google.com/?q=-6.9705992,107.7648696&t=h&z=18`.
+- The exact user-example URL was opened with Android's VIEW intent and
+  launched the installed Google Maps app. Maps rendered the destination;
+  its visible coordinate text rounded to seven decimal places.
+- A09 regression on the A10 APK: map tap changed coordinate and address;
+  date confirmation changed only date; time confirmation changed only
+  time; date/time cancellation preserved confirmed values; date/time
+  edits left the QR URL unchanged; the Photo Picker opened and canceled
+  without losing app state.
+- Final app log/process checks found no fatal exception, ANR,
+  `OutOfMemoryError`, or QR-generation failure; MainActivity process
+  remained alive.
+- Lint — FAIL: six existing `NewApi` errors remain in A05
+  `PhotoPreview.kt`, with nine warnings and two hints. No lint finding
+  points to the A10 QR implementation.
+- Camera audit — no CAMERA permission, CameraX/Camera2/API, capture
+  intent, or camera UI/dependency found in manifest, Gradle config, or
+  main source.
+- A11+ audit — this task adds no map snapshot, final image compositor,
+  final image preview, MediaStore save, Sharesheet, or Firebase feature.
+- `git diff --check` — PASS; only existing line-ending normalization
+  notices.
+
+Self-audit:
+- Payload source is only `selectedCoordinate`; no parallel coordinate
+  state, device location, camera center, address, metadata, or URL parsing:
+  PASS.
+- URL separators, exact coordinate precision, no-selection state, and
+  stale-QR replacement: PASS.
+- QR encoding and bitmap rendering are local; encoding runs off the main
+  thread; old bitmaps are recycled: PASS.
+- Added dependency is the only production QR encoder and is used; JUnit
+  is test-only: PASS.
+- No QR changes to selected coordinate, map style, date, or time: PASS.
+- Camera/scope/secrets/debug logging audit: PASS.
+
+Known limitations:
+- Google Maps production map runtime remains BLOCKED under A06 because no
+  valid restricted Maps API key/configuration is available; the app's
+  interactive map runtime used the approved osmdroid development fallback.
+- QR encoding is implemented without network APIs and unit-tested locally;
+  a dedicated airplane-mode emulator run was not performed.
+- Lint remains failed by the existing unrelated A05 `PhotoPreview.kt`
+  API-level diagnostics.
+
+Date:
+- 2026-10-04
+
+---
+
 ## Regression Checklist
 
 Before final release, verify:
@@ -568,52 +694,65 @@ Do not erase useful historical evidence merely to make the file shorter.
 
 ## Current Session Checkpoint
 
-Current Task: A09 — Manual date/time selection
+Current Task: A10 — Local QR generation
 
 Status: VERIFIED
 
 Completed:
-- Added independent, saveable manual date and 24-hour WIB time state
-  with Material 3 picker confirmation/cancellation.
-- Fixed A08 lint findings with coarse-location permission guards and
-  API-level annotations for newer Geocoder/location methods.
-- Rebuilt, installed, and checked the latest APK on `emulator-5554`;
-  map/address, picker state, cancellation, and app liveness passed.
+- Audited A09 only; verified date/time independence, manual authority,
+  map/location/address separation, foreground-only coarse location, and
+  no-camera invariants.
+- Added local ZXing-based QR generation from selectedCoordinate with the
+  reference Maps URL format, a no-selection state, and coordinate-change
+  regeneration.
+- Built/tested the QR encoder, decoded the generated bitmap from emulator
+  screenshots, opened the example URL in Google Maps, and regression-tested
+  A09 map/date/time/Photo Picker behavior.
 
 Files Changed:
-- `app/src/main/java/com/geotagphotogenerator/ManualDateTimeCard.kt`
+- `app/src/main/java/com/geotagphotogenerator/LocationQrCode.kt`
+- `app/src/test/java/com/geotagphotogenerator/LocationQrCodeTest.kt`
 - `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
-- `app/src/main/java/com/geotagphotogenerator/DeviceLocationProvider.kt`
-- `app/src/main/java/com/geotagphotogenerator/AddressResolver.kt`
+- `app/build.gradle.kts`
+- `gradle/libs.versions.toml`
 - `GeoTag-Photo-Generator-Source-of-Truth.md`
 - `AGENTS.md`
 - `AI-CODING-AGENT-PROMPT.md`
+- `DEVELOPER-COSTS-AND-BILLING.md`
 - `README.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- Isolated `test` and `assembleDebug` — PASS after final source changes;
-  unit-test source sets are `NO-SOURCE`.
-- Lint — FAIL due to six unrelated A05 `PhotoPreview.kt` API-level
-  errors; A08 lint findings are fixed.
-- Runtime checks passed on `emulator-5554`; no crash or ANR.
+- `.\gradlew.bat --no-daemon test --rerun-tasks --console=plain` —
+  PASS (3 QR tests, exact URLs decoded).
+- `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS.
+- Final APK installed/launched on `emulator-5554`; no crash/ANR.
+- Actual QR screenshot decoded locally to the exact displayed selected
+  coordinate URL.
+- Exact reference and full-precision sample URLs decoded in unit tests.
+- Google Maps accepted the user-example URL and opened the destination;
+  visible coordinate text rounded to seven decimals.
+- A09 map/address, date/time confirmation/cancellation/independence, and
+  Photo Picker open/cancel regression checks passed.
+- Lint FAIL remains limited to six existing A05 ImageDecoder API errors.
 
 Self-Audit:
-- Independent date/time state and confirm/cancel semantics: PASS.
-- A08 permission/API guards and asynchronous address lookup: PASS.
-- Camera permission/API/dependency/intent/UI absent: PASS.
-- A10+ implementation absent: PASS.
-- No new dependency, secret, permission, service, or paid API: PASS.
+- QR reads only selectedCoordinate and retains full Double precision: PASS.
+- No initial/fake QR; stale bitmap is cleared/recycled: PASS.
+- QR generation is local and off-main-thread: PASS.
+- A09 state and provider-independent map/address behavior remain intact:
+  PASS.
+- No camera capability or A11+ implementation: PASS.
 
 Blockers:
-- Whole-project lint remains failed on existing A05 ImageDecoder API
-  findings; these are out of scope for this task.
 - A06 remains BLOCKED until real Google Maps runtime validation with a
   valid restricted key/configuration.
+- Whole-project lint remains failed on existing A05 ImageDecoder API
+  findings; no A10 lint finding remains.
 
 Next Action:
-- A10 — Local QR generation. Do not change A06 status based on
-  osmdroid validation.
+- A11 — Google Maps mini-map snapshot. Keep A06 BLOCKED until real
+  Google Maps runtime configuration is available.
 
 Last Updated:
 - 2026-10-04

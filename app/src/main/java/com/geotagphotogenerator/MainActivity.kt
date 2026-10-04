@@ -400,6 +400,10 @@ private fun CompactLayout(
                 onTimeSelected = onTimeSelected,
             )
 
+            LocationQrCodeCard(
+                selectedCoordinate = mapCardState.selectedCoordinate,
+            )
+
             selectionError?.let { error ->
                 Text(
                     text = error,
@@ -520,6 +524,10 @@ private fun WideLayout(
                 selectedTimeMinutes = selectedTimeMinutes,
                 onDateSelected = onDateSelected,
                 onTimeSelected = onTimeSelected,
+            )
+
+            LocationQrCodeCard(
+                selectedCoordinate = mapCardState.selectedCoordinate,
             )
 
             selectionError?.let { error ->

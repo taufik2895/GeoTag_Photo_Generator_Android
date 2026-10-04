@@ -101,6 +101,19 @@ Rules:
 - A passing osmdroid test is not evidence that Google Maps runtime works.
 - Final production/release validation must verify real Google Maps.
 
+### Local QR
+
+- Generate the QR locally from the current user-selected
+  `selectedCoordinate` only.
+- Use `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18`;
+  `q` contains only the coordinate pair, while `t=h` and `z=18` remain
+  separate URL parameters.
+- Preserve `Double` precision, regenerate on coordinate change, and
+  show no QR before a coordinate is selected.
+- QR encoding needs no network, backend, database, Place ID, or Places API.
+- Keep QR generation independent from device location, map camera/style,
+  address resolution, date/time, and future image composition.
+
 ---
 
 ## 2. Required Technology

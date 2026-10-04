@@ -139,10 +139,14 @@ QR generation is local.
 Required payload:
 
 ```text
-https://www.google.com/maps?q={latitude},{longitude}
+https://maps.google.com/?q={latitude},{longitude}&t=h&z=18
 ```
 
-No proprietary redirect service or database is required.
+The URL is built from `selectedCoordinate`; `q` contains only
+`latitude,longitude`, and `t=h` plus `z=18` are separate parameters. QR
+encoding is local and does not require a proprietary redirect service,
+database, internet connection, or Places API. Internet is needed only
+when the scanned URL is opened for map navigation.
 
 ### 3.6 Image composition
 

@@ -283,19 +283,29 @@ Do not add Places API merely for reverse geocoding unless technically justified 
 
 QR generation must be local.
 
-Required payload:
+Required local payload, built only from the user's current
+`selectedCoordinate`:
 
 ```text
-https://www.google.com/maps?q={latitude},{longitude}
+https://maps.google.com/?q={latitude},{longitude}&t=h&z=18
 ```
 
 Rules:
 
-- preserve exact useful coordinate precision,
+- `q` contains only `latitude,longitude`; do not append zoom or distance.
+- `t=h` and `z=18` are separate URL parameters, not coordinate data.
+- preserve the selected `Double` coordinate precision without rounding.
+- if no coordinate has been selected, do not generate a QR or use a default.
+- regenerate the URL and QR whenever `selectedCoordinate` changes; never
+  show a previous QR as if it represents the new selection.
+- generate and render the QR locally on-device; no internet, backend,
+  database, Places API, or server is needed to encode it.
 - do not shorten the URL,
 - do not redirect through this application,
 - do not require a database,
-- QR must open Google Maps at the selected coordinate.
+- do not parse Google Maps page URLs or use Place IDs/Places APIs.
+- QR must open Google Maps at the selected coordinate. Internet is needed
+  only when the scanned URL is opened for map navigation.
 
 ---
 

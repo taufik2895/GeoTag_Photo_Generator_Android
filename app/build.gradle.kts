@@ -69,6 +69,8 @@ dependencies {
     implementation(libs.androidx.exifinterface)
     implementation(libs.maps.compose)
     implementation(libs.osmdroid.android)
+    implementation(libs.zxing.core)
 
     debugImplementation(libs.androidx.compose.ui.tooling)
+    testImplementation(libs.junit)
 }
