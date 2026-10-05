@@ -142,7 +142,12 @@ Avoid over-engineering.
 
 ---
 
-# 6. GOOGLE MAPS
+# 6. MAP ARCHITECTURE
+
+Use a deliberate split between interactive coordinate selection and final-image
+map/address content.
+
+## 6.1 Interactive coordinate picker
 
 Use the official Google Maps SDK for Android.
 
@@ -162,85 +167,98 @@ latitude: Double
 longitude: Double
 ```
 
-Do not use:
-
-- scraped map tiles;
-- unofficial map endpoints;
-- billing bypasses;
-- fake map images;
-- unsupported workarounds.
-
-Prefer native Android map snapshot capability such as `GoogleMap.snapshot()` for the mini-map when it is suitable and compliant.
-
-Do not add Places SDK, Routes API, or Static Maps API unless a concrete requirement makes one necessary and the decision is explicitly documented.
-
-Preserve required Google Maps attribution/branding.
+Do not use scraped map tiles, unofficial map endpoints, billing bypasses,
+fake map images, or unsupported workarounds.
 
 ### Development-only osmdroid fallback
 
-The production provider remains Google Maps SDK for Android.
+If `MAPS_API_KEY` / `GOOGLE_MAPS_API_KEY` is unavailable during development,
+the agent MAY use osmdroid as a temporary fallback for interactive map work.
 
-If `MAPS_API_KEY` / `GOOGLE_MAPS_API_KEY` is unavailable during
-development, the agent MAY use osmdroid as a temporary development
-fallback so independent map UI/runtime work can continue.
+Rules:
 
-Mandatory rules:
-
-- Do not delete Google Maps code, dependencies, methods, or
-  configuration because the key is missing.
+- Do not delete Google Maps code, dependencies, methods, or configuration.
 - Valid Google Maps configuration -> Google Maps.
 - Missing Google Maps configuration -> osmdroid development fallback.
 - Never initialize both providers simultaneously.
-- Use the same provider-independent coordinate model:
-  `latitude: Double`, `longitude: Double`.
-- osmdroid is never the production provider.
-- osmdroid must not be used as a Google Maps billing bypass.
-- Do not scrape Google tiles or use unofficial Google map endpoints.
-- Standard OpenStreetMap tiles may be used by osmdroid for development.
-- A successful osmdroid runtime test does not count as Google Maps
-  runtime validation.
+- Use the same provider-independent coordinate model.
+- osmdroid is never the production provider or a billing bypass.
+- A successful osmdroid test does not count as Google Maps validation.
 - Final release validation must verify real Google Maps SDK behavior.
-- Keep device location, map camera position, and selected coordinate
-  separate. A one-time coarse location may center the initial camera
-  only and must never set the selected point/marker.
-- Request `ACCESS_COARSE_LOCATION` contextually. If declined or
-  unavailable, keep the map usable at the deterministic default center.
-  Never add background tracking or location history.
-- Resolve addresses from `selectedCoordinate`, never device location or
-  camera center.
-- Interactive Google Maps may offer NORMAL, SATELLITE, TERRAIN, and
-  HYBRID; mark unsupported development-fallback styles unavailable.
-- The final generated mini-map must explicitly use SATELLITE,
-  independent of interactive appearance. Do not add Static Maps API,
-  scrape tiles, or bypass billing.
-- Generate it only from `selectedCoordinate`, with the marker at the
-  selected point and a separate deterministic camera at zoom `16.0`.
-  Never follow interactive camera/style state or substitute osmdroid
-  when Google Maps configuration is unavailable. Preserve the complete
-  Maps snapshot and required attribution/branding.
+- Device location may center the initial camera only and never selects the
+  GeoTag coordinate.
+- Request `ACCESS_COARSE_LOCATION` contextually.
+- Unsupported fallback map styles must be unavailable rather than simulated.
 
-If no Google Maps key exists, classify Google Maps runtime validation as
-an external configuration blocker rather than deleting or replacing the
-Google Maps implementation.
+## 6.2 Final exported mini-map
 
----
+The final JPG/PNG MUST NOT use `GoogleMap.snapshot()` or Google Static Maps.
+
+Use **Mapbox Static Images API** for the exported mini-map.
+
+Approved satellite style:
+
+```text
+mapbox/satellite-v9
+```
+
+Do not use Mapbox Standard or Mapbox Standard Satellite for Static Images.
+
+The static image must:
+
+- use only `selectedCoordinate`;
+- center on that coordinate;
+- include a marker at the exact selected coordinate;
+- use a deterministic export zoom defined by implementation;
+- be independent of interactive map camera/style;
+- preserve required Mapbox attribution/branding;
+- decode into a bitmap for local Canvas composition.
+
+No Google map image may be copied into the final exported JPG/PNG.
+
+## 6.3 Final exported address
+
+Use **Mapbox Reverse Geocoding** for the address displayed in the final
+exported JPG/PNG.
+
+Rules:
+
+- query only `selectedCoordinate`;
+- never use device location or interactive camera center;
+- do not fabricate an address;
+- handle loading/not-found/error/timeout safely;
+- use a Mapbox usage mode/contract that permits the address result to be
+  retained in the generated user image;
+- verify current Mapbox terms, attribution, and pricing before release.
+
+The existing Android `Geocoder` implementation from A08 may remain for
+interactive/on-screen address behavior, but it is NOT the authoritative
+source for the final exported address.
+
+## 6.4 Credentials
+
+Never commit Mapbox tokens or Google API keys.
+
+Use local/environment configuration during development. For client-side
+Mapbox integration, use the least-privilege token/scopes and operational
+controls supported by Mapbox, and document the security/exposure model
+before release.
+
+If Mapbox configuration is missing, keep the integration explicitly blocked;
+do not substitute Google snapshot, Google Static Maps, or osmdroid tiles.
 
 # 7. ADDRESS
 
-Prefer Android `Geocoder` when sufficient.
+The final exported address is a Mapbox Reverse Geocoding result keyed only to
+`selectedCoordinate`.
 
-For modern Android, avoid blocking/deprecated patterns where an asynchronous API is available.
-
-If address resolution fails:
-
-- keep the coordinate usable;
-- show a clear fallback;
-- never fabricate address data.
-- resolve only from the user's selected coordinate.
-
-Do not add paid Google geocoding merely because it is familiar.
-
----
+- Do not use device location or map camera center.
+- Do not fabricate address data.
+- Handle unavailable/not-found/error/timeout states.
+- Existing Android `Geocoder` may remain for interactive A08 behavior, but
+  final image generation must use the approved Mapbox address result.
+- Verify Mapbox usage mode, retention/storage rights, pricing, and
+  attribution against current official documentation before release.
 
 # 8. DATE / TIME
 
@@ -326,7 +344,7 @@ Photo URI
   ↓
 Safe Decode / Resize
   ↓
-Map Snapshot + Location + Coordinates + Date/Time + QR
+Mapbox Static Satellite Bitmap + Mapbox Address + Coordinates + Date/Time + Local QR
   ↓
 Bitmap + Canvas
   ↓
@@ -562,7 +580,7 @@ A07 Coordinate selection/state
 A08 Address resolution
 A09 Manual date/time
 A10 Local QR generation
-A11 Google Maps mini-map snapshot
+A11 Final Map Provider Integration — Mapbox Static Images + Reverse Geocoding
 A12 Bitmap + Canvas compositor
 A13 Final image preview
 A14 MediaStore Save

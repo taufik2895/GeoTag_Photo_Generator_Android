@@ -73,64 +73,53 @@ The application must not use:
 
 Photo input is through Android Photo Picker / system picker.
 
-### 3.3 Google Maps and development-only fallback
+### 3.3 Interactive Google Maps and development-only fallback
 
-Use the official Google Maps SDK for Android as the production map provider.
+Use the official Google Maps SDK for Android as the production **interactive
+coordinate picker**.
 
-The project should avoid adding unnecessary Google Maps Platform APIs.
+The final exported image uses a separate provider pipeline:
 
-Approved location/map behavior:
+- Mapbox Static Images API -> final satellite mini-map;
+- Mapbox Reverse Geocoding -> final exported address.
 
-- A one-time device-location fix may center the interactive map. Request
-  only contextual `ACCESS_COARSE_LOCATION`; do not add background
-  tracking, location history, or location transmission.
-- Reverse geocoding uses the manually selected coordinate and should
-  prefer Android `Geocoder`; the selected coordinate remains authoritative.
-- Interactive map styles must be supported by the active provider. The
-  development fallback may expose only NORMAL.
-- The final generated mini-map must explicitly use SATELLITE regardless
-  of interactive map appearance. Do not add Static Maps API or use
-  unofficial tiles/tile scraping as a shortcut.
-
-A temporary **osmdroid development fallback** is permitted only when a
-valid Google Maps configuration is unavailable during development.
-
-This fallback does NOT change the production architecture.
+A temporary **osmdroid development fallback** is permitted only when valid
+Google Maps configuration is unavailable during development.
 
 Rules:
 
-- Valid Google Maps configuration -> Google Maps SDK for Android.
-- Missing Google Maps configuration -> osmdroid may be used only for
-  development/runtime work.
-- Google Maps implementation must remain in the repository even when
-  the key is unavailable.
-- Google Maps and osmdroid must never be initialized simultaneously.
-- osmdroid must never be presented as the production map provider.
-- osmdroid must never be used to bypass Google Maps billing, quotas,
-  licensing, API restrictions, or other production requirements.
-- Standard OpenStreetMap tiles used by osmdroid are development-only
-  and must not be described as Google Maps data.
-- Final production cost/billing audit must still include the actual
-  Google Maps production dependency and configuration.
+- Valid Google Maps configuration -> Google Maps SDK for interactive map.
+- Missing Google Maps configuration -> osmdroid only for development/runtime.
+- Google Maps implementation must remain in the repository.
+- Google Maps and osmdroid must never initialize simultaneously.
+- osmdroid must never be the production provider or a billing bypass.
+- Standard OpenStreetMap tiles used by osmdroid are development-only.
 
-The project should avoid adding unnecessary Google Maps Platform APIs.
+The final exported mini-map MUST NOT use `GoogleMap.snapshot()`, Google
+Static Maps, or scraped Google tiles.
 
-Do not add without an explicit approved requirement:
+The approved exported mini-map provider is **Mapbox Static Images API** using
+`mapbox/satellite-v9`, with required attribution/branding preserved.
 
-- Places SDK;
-- Routes API;
-- Static Maps API;
-- other Google Maps Platform APIs.
+The approved exported address provider is **Mapbox Reverse Geocoding**, keyed
+only to `selectedCoordinate`. The final audit must verify Mapbox geocoding
+retention/storage rights, current pricing, and attribution requirements.
 
-For the mini-map, prefer the native Android Maps snapshot capability such as `GoogleMap.snapshot()` when it satisfies the requirement and complies with the applicable Google Maps terms/attribution requirements.
+Do not add Places, Routes, or other Google Maps Platform APIs without an
+explicit approved requirement.
 
 ### 3.4 Address resolution
 
-Prefer Android `Geocoder` when it is sufficient.
+The final exported address is produced by **Mapbox Reverse Geocoding** from
+`selectedCoordinate`.
 
-Do not add a paid Google geocoding service merely to replace a working platform-level solution.
+The existing Android `Geocoder` may remain for interactive/on-screen A08
+behavior, but it is not the authoritative provider for the final exported
+address.
 
-If the final implementation uses a Google geocoding service instead, document the concrete reason and the actual API.
+For Mapbox, verify the usage mode/contract that permits the result to be
+retained in the generated user image, plus current pricing and attribution,
+before release.
 
 ### 3.5 QR
 
@@ -207,6 +196,8 @@ The Android application must not:
 | Material 3 | `[ ]` | `[fill]` | `[fill]` | None | `[file/config]` |
 | Material 3 Adaptive | `[ ]` | `[fill]` | `[fill]` | None | `[file/config]` |
 | Google Maps SDK for Android | `[ ]` | `[fill]` | `[fill]` | `[verify current terms/pricing]` | `[file/config]` |
+| Mapbox Static Images API | `[ ]` | `[fill]` | `[fill]` | `[verify current terms/pricing]` | `[Mapbox integration/config]` |
+| Mapbox Reverse Geocoding | `[ ]` | `[fill]` | `[fill]` | `[verify current terms/pricing]` | `[Mapbox integration/config]` |
 | Firebase Remote Config | `[ ]` | `[fill]` | `[fill]` | `[verify current terms/pricing]` | `[file/config]` |
 | QR library | `[ ]` | `[fill]` | `[fill]` | `[fill]` | `[Gradle dependency]` |
 | Other dependency | `[ ]` | `[fill]` | `[fill]` | `[fill]` | `[Gradle dependency]` |
@@ -233,6 +224,22 @@ Complete this from the final implementation.
 Only list a service as **Used = Yes** when there is evidence in the final project/configuration that the application actually uses it.
 
 ---
+
+# 6. MAPBOX AUDIT
+
+Complete this from the final implementation.
+
+| Mapbox service | Actually used? | Why used | Required configuration | Billing impact | Current free allowance / pricing | Cost risk | Official source checked |
+|---|---|---|---|---|---|---|---|
+| Static Images API | `[ ]` | `[fill]` | `[fill]` | `[verify]` | `[verify]` | `[fill]` | `[official source]` |
+| Reverse Geocoding API | `[ ]` | `[fill]` | `[fill]` | `[verify]` | `[verify]` | `[fill]` | `[official source]` |
+
+### Mapbox audit rule
+
+Only mark a Mapbox service as actually used when the final project/configuration
+contains evidence of that use. Verify `mapbox/satellite-v9`, attribution,
+token/security model, Reverse Geocoding retention/storage rights, current
+pricing, and quotas.
 
 # 6. FIREBASE AUDIT
 
@@ -411,7 +418,8 @@ Examples:
 
 - Places SDK — not needed if coordinate selection/address requirements are satisfied without it.
 - Routes API — not required.
-- Static Maps API — not required if native map snapshot is sufficient.
+- Google Static Maps API — deliberately not used for the exported image; replaced by Mapbox Static Images.
+- `GoogleMap.snapshot()` — deliberately not used for the exported image; Google Maps remains the interactive picker.
 - Cloud image processing — not required.
 - Cloud photo storage — not required.
 - Custom backend — not required.
@@ -490,10 +498,21 @@ The AI coding agent must check all of the following before declaring this docume
 - [ ] Actual Maps SDK usage confirmed.
 - [ ] Actual enabled APIs confirmed.
 - [ ] API key restrictions reviewed.
-- [ ] Mini-map implementation confirmed.
-- [ ] Static Maps API is not enabled/used unless actually required.
+- [ ] Interactive Google Maps implementation confirmed.
+- [ ] GoogleMap.snapshot() is not used for the exported image.
+- [ ] Google Static Maps API is not enabled/used for the exported image.
 - [ ] Places is not enabled/used unless actually required.
 - [ ] Routes is not enabled/used unless actually required.
+
+## Mapbox
+
+- [ ] Static Images API usage confirmed.
+- [ ] `mapbox/satellite-v9` confirmed for exported mini-map.
+- [ ] Attribution/branding requirements reviewed.
+- [ ] Reverse Geocoding usage confirmed.
+- [ ] Retention/storage rights for exported address verified.
+- [ ] Mapbox token/security restrictions reviewed.
+- [ ] Current Mapbox pricing/free allowances verified.
 
 ## Firebase
 

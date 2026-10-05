@@ -35,9 +35,11 @@ The web prototype is complete and remains a behavioral/reference implementation.
 - [x] Jetpack Compose.
 - [x] Material 3.
 - [x] Material 3 Adaptive where appropriate.
-- [x] Google Maps SDK for Android as the production map provider.
-- [x] osmdroid permitted only as a temporary development fallback when
-      Google Maps configuration is unavailable.
+- [x] Google Maps SDK for Android as the production interactive coordinate picker.
+- [x] Mapbox Static Images API as the final exported satellite mini-map provider.
+- [x] Mapbox Reverse Geocoding as the final exported address provider.
+- [x] osmdroid permitted only as a temporary development fallback for the
+      interactive map when Google Maps configuration is unavailable.
 - [x] Device location, camera position, and selected coordinate are
       separate; location is a one-time initial-camera aid only.
 - [x] Interactive styles are provider-gated; final mini-map must
@@ -59,41 +61,48 @@ The web prototype is complete and remains a behavioral/reference implementation.
 
 ### Map Provider Policy
 
-Production provider:
+Production architecture is intentionally split:
 
 ```text
-Google Maps SDK for Android
-```
+Google Maps SDK
+    -> interactive coordinate selection
 
-Development-only fallback:
+Mapbox Static Images (`mapbox/satellite-v9`)
+    -> final exported satellite mini-map
 
-```text
-osmdroid + standard OpenStreetMap tiles
-```
+Mapbox Reverse Geocoding
+    -> final exported address
 
-Provider selection:
+Local QR
+    -> Google Maps URL
 
-```text
-Valid Google Maps configuration
-    -> Google Maps
-
-No valid Google Maps configuration
-    -> osmdroid development fallback
+Bitmap + Canvas
+    -> final JPG/PNG
 ```
 
 Rules:
 
-- Google Maps remains the production provider.
-- Do not delete Google Maps code/dependencies/configuration when the key is missing.
-- Never initialize both providers simultaneously.
-- Both providers use the same `latitude: Double` / `longitude: Double` model.
-- osmdroid is development-only and must never become the production map provider.
-- osmdroid must never be used as a Google Maps billing bypass.
-- No Google tile scraping or unofficial Google map endpoints.
-- osmdroid runtime success does not equal Google Maps runtime success.
-- Final release validation must verify real Google Maps SDK behavior.
+- Google Maps remains the production interactive map provider.
+- Do not delete Google Maps code/dependencies/configuration when the key is
+  missing.
+- osmdroid is development-only and never production.
+- Google Maps and osmdroid are never initialized simultaneously.
+- Both interactive providers use the same `latitude: Double` /
+  `longitude: Double` model.
+- The exported mini-map must not use `GoogleMap.snapshot()`, Google Static
+  Maps, scraped tiles, or osmdroid tiles.
+- The exported mini-map uses Mapbox Static Images with `mapbox/satellite-v9`,
+  exact selectedCoordinate, marker, deterministic export camera, and required
+  attribution/branding.
+- The exported address uses Mapbox Reverse Geocoding from selectedCoordinate.
+- Android Geocoder remains acceptable for interactive A08 behavior but is not
+  authoritative for the final exported address.
+- Mapbox token/API configuration must not be committed.
+- Final release audit must verify current Mapbox pricing, attribution,
+  token/security model, and geocoding retention/storage rights.
+- Final release validation must verify real Google Maps interactive behavior
+  and the real Mapbox export pipeline.
 
----
 
 ## Task Ledger
 
@@ -109,7 +118,7 @@ Rules:
 | A08 | Address resolution | VERIFIED | Android Geocoder resolves only the manually selected coordinate; one-time coarse location centers the initial camera without auto-selecting a point; provider-specific interactive styles expose only supported fallback Normal style. Follow-up lint audit added explicit coarse-permission guards and API-level annotations to the location/Geocoder helpers; all A08 lint errors are cleared. Fresh debug APK built and installed on `emulator-5554`; permission-denial fallback, granted-location centering, map taps, coordinate updates, and address rendering were checked. Google Maps runtime/styles remain blocked under A06. Verified 2026-10-04. |
 | A09 | Manual date/time | VERIFIED | Independent saveable date/time state and Material 3 pickers implemented. Final debug APK passed test/build and emulator checks for date/time confirmation, independence, cancellation, A08 map/address regression, and Photo Picker cancellation. A08 lint findings were corrected. Whole-project lint remains failed on six A05 `PhotoPreview.kt` API-level errors; no A05 code was changed. Verified 2026-10-04. |
 | A10 | Local QR generation | VERIFIED | Local ZXing Core 3.5.3 encoder builds the exact `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18` payload only from `selectedCoordinate`. Three unit tests decoded exact reference/example/full-precision payloads; the QR on the final emulator APK screenshot was independently decoded to its exact selected-coordinate URL. Map reselection regenerated a changed URL/QR; date/time changes left it unchanged. `test` and `assembleDebug` PASS; lint remains blocked only by six existing A05 `PhotoPreview.kt` API errors. No A11+ implementation. Verified 2026-10-04. |
-| A11 | Google Maps mini-map snapshot | BLOCKED | Google Maps SDK snapshot path is implemented as satellite-only and selected-coordinate-driven, but production rendering/snapshot/attribution cannot be runtime-verified while `MAPS_API_KEY_CONFIGURED = false`. The emulator correctly reports the missing configuration instead of presenting osmdroid as satellite. |
+| A11 | Final Map Provider Integration — Mapbox Static Images + Reverse Geocoding | IN_PROGRESS | Approved architecture change: GoogleMap.snapshot()/Google Static Maps are no longer used for the exported image. Existing A11 implementation must be reworked to Mapbox Static Images (`mapbox/satellite-v9`) plus Mapbox Reverse Geocoding. Audit A10 only before implementation. A06 remains BLOCKED because valid Google Maps configuration is still unavailable. |
 | A12 | Bitmap + Canvas compositor | NOT_STARTED | |
 | A13 | Final image preview | NOT_STARTED | |
 | A14 | MediaStore Save | NOT_STARTED | |
@@ -595,9 +604,11 @@ Date:
 
 ---
 
-### A11 — Google Maps mini-map snapshot
+### A11 (Superseded) — Google Maps mini-map snapshot
 
 Status: BLOCKED
+
+> Superseded by the approved Mapbox Static Images + Reverse Geocoding architecture. Historical evidence below is retained for traceability only.
 
 A10 audit before A11:
 - The committed A10 QR builder uses only the supplied `MapCoordinate`
@@ -712,6 +723,29 @@ Date:
 
 ---
 
+## A11 Architecture Change Record
+
+The original A11 implementation used `GoogleMap.snapshot()` for the final
+satellite mini-map. That implementation is **superseded** by the approved
+split-provider architecture.
+
+Decision:
+
+- Keep Google Maps SDK for interactive coordinate selection.
+- Do not use `GoogleMap.snapshot()` for the exported JPG/PNG.
+- Do not use Google Static Maps for the exported JPG/PNG.
+- Use Mapbox Static Images with `mapbox/satellite-v9` for the exported
+  satellite mini-map.
+- Use Mapbox Reverse Geocoding for the final exported address.
+- Keep local QR generation and its Google Maps destination unchanged.
+- Keep Bitmap + Canvas composition local.
+- Preserve Mapbox attribution/branding.
+- Verify Mapbox token/security, pricing, attribution, and geocoding
+  retention/storage terms before release.
+
+The old A11 code/history remains in this ledger for traceability but is not
+the final production-image architecture.
+
 ## Regression Checklist
 
 Before final release, verify:
@@ -811,75 +845,72 @@ Do not erase useful historical evidence merely to make the file shorter.
 
 ## Current Session Checkpoint
 
-Current Task: A11 — Google Maps mini-map snapshot
+Current Task: A11 — Final Map Provider Integration — Mapbox Static Images + Reverse Geocoding
 
-Status: BLOCKED
+Status: IN_PROGRESS
 
 Completed:
-- Audited A10 only; verified the exact local QR URL, full-precision
-  selectedCoordinate source, passing local encode/decode tests, and
-  absence of side effects on address/date/time.
-- Implemented a separate Google Maps SDK snapshot path that explicitly
-  enforces Satellite, selectedCoordinate camera/marker, deterministic
-  zoom 16.0, and coordinate-keyed bitmap cleanup. Added an explicit
-  missing-key blocked state instead of representing osmdroid as satellite.
-- Fresh debug APK passed build/test, installed and ran on
-  `emulator-5554`. A10 selection/QR/address/date/time/pan and Photo Picker
-  open/cancel regressions passed.
-- Google Maps production snapshot remains unverified because no Maps API
-  key is configured; A11 is therefore BLOCKED, not VERIFIED.
+- Audited A10 only before the architecture change.
+- Confirmed A10 local QR remains authoritative and unchanged:
+  `https://maps.google.com/?q=LATITUDE,LONGITUDE&t=h&z=18`.
+- Approved the split-provider architecture: Google Maps SDK for interactive
+  coordinate selection; Mapbox Static Images for exported satellite mini-map;
+  Mapbox Reverse Geocoding for exported address; local QR for Google Maps.
+- Identified the previous GoogleMap.snapshot() A11 implementation as
+  superseded for final-image generation.
+- Kept the previous implementation/history for traceability.
+
+Remaining:
+- Rework A11 into Mapbox Static Images + Reverse Geocoding.
+- Use `mapbox/satellite-v9`.
+- Generate the static image only from `selectedCoordinate`, with exact marker
+  and deterministic export camera.
+- Preserve required Mapbox attribution/branding.
+- Implement explicit missing-token/network/error states.
+- Integrate final-export address from Mapbox Reverse Geocoding while leaving
+  Android Geocoder available for interactive A08 behavior.
+- Verify current Mapbox pricing, attribution, token/security model, and
+  geocoding retention/storage rights against official documentation.
+- Keep A12+ untouched until A11 is genuinely verified.
 
 Files Changed:
-- `app/src/main/java/com/geotagphotogenerator/GoogleMapsMiniMap.kt`
-- `app/src/main/java/com/geotagphotogenerator/MainActivity.kt`
 - `GeoTag-Photo-Generator-Source-of-Truth.md`
 - `AGENTS.md`
 - `AI-CODING-AGENT-PROMPT.md`
-- `README.md`
+- `DEVELOPER-COSTS-AND-BILLING.md`
 - `IMPLEMENTATION_STATUS.md`
 
 Validation:
-- `.\gradlew.bat --no-daemon test --console=plain` — PASS (3 A10 QR
-  tests, 0 failures/errors/skips).
-- `.\gradlew.bat --no-daemon assembleDebug --console=plain` — PASS.
-- APK installed/launched on `emulator-5554`; process remained alive.
-- Final cold launch rendered after about 23 seconds and reported 899
-  skipped frames; no ANR for this app, but startup jank needs follow-up.
-- A11 UI showed snapshot blocked until `MAPS_API_KEY` configuration.
-- A10 coordinate/QR/address/date/time/pan and Photo Picker cancellation
-  regression checks passed.
-- Lint FAIL: six existing A05 `PhotoPreview.kt` API errors, nine warnings,
-  two hints; no A11 lint finding.
-- Logcat also contained an ANR in the separate `com.google.android.apps.maps`
-  process; the A11 Google Maps path was not initialized without a key.
-- `git diff --check` — PASS.
+- Documentation-only architecture update; no Android code changed by this
+  source-of-truth update.
+- Existing A10 evidence remains valid.
+- Existing A06 blocker remains.
+- No A12+ implementation started.
 
 Self-Audit:
-- Snapshot uses selectedCoordinate only, has independent satellite camera,
-  fixed zoom, exact marker, and does not follow interactive style/camera:
-  PASS by code inspection.
-- Snapshot capture preserves the full bitmap/branding and disposes
-  replaced bitmaps; no fake fallback: PASS by code inspection.
-- Camera and A12+ scope audits: PASS.
+- Five authoritative source-of-truth files updated.
+- `DOCUMENT-SET-README.md` intentionally not modified.
+- No sixth source-of-truth created.
+- No camera requirement changed.
+- No QR payload changed.
+- No A12+ scope added.
+- Old A11 Google snapshot path explicitly marked superseded.
+- Cost document remains an implementation-time audit template.
 
 Blockers:
-- Google Maps production key/configuration is missing; real satellite
-  snapshot path is not runtime-verified. A06 and A11 remain BLOCKED until
-  valid restricted configuration and the relevant real Google Maps
-  runtime checks are supplied.
-- Whole-project lint remains failed on existing A05 ImageDecoder API
-  findings.
+- No valid Google Maps configuration is currently available for real
+  interactive Google Maps runtime validation.
+- Mapbox credentials/configuration have not yet been added.
+- Mapbox production pricing/terms/security and geocoding retention details
+  must be verified during A11/final audit.
 
 Next Action:
-- Configure a valid restricted Maps SDK key, then validate the real Google
-  Maps satellite snapshot, marker, attribution, coordinate changes, and
-  interactive-style independence. Keep A06 BLOCKED until separately
-  validated; do not start A12.
+- Implement A11 only: Mapbox Static Images (`mapbox/satellite-v9`) + Mapbox
+  Reverse Geocoding, after auditing the current A11 code and A10 regression.
+  Do not start A12.
 
 Last Updated:
-- 2026-10-04
-
----
+- 2026-10-05
 
 ## Git
 

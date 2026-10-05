@@ -4,7 +4,7 @@ app/build/
 local.properties
 *.iml
 .idea/
-
+validation-build/
 # Signing material and local credentials must never be committed.
 *.jks
 *.keystore
